@@ -4,12 +4,19 @@ use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::path::PathBuf;
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
+pub enum ElementType {
+    Application,
+    CalculatorResult,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct Element {
     pub name: String,
     pub value: String,
     pub base_score: usize,
     pub icon_path: Option<PathBuf>,
     pub app_bundle_path: Option<PathBuf>,
+    pub element_type: ElementType,
 }
 
 impl Element {
@@ -20,6 +27,38 @@ impl Element {
             base_score: 0,
             icon_path: None,
             app_bundle_path: None,
+            element_type: ElementType::Application,
+        }
+    }
+
+    pub fn new_calculator_result(expression: String, result: String) -> Self {
+        // Numbat's formatted output can be:
+        // "= 3" (exact result)
+        // "≈ 3.10686 mi" (approximate result)
+        // We want to display nicely without double symbols
+        
+        let display_name = if result.starts_with("= ") || result.starts_with("≈ ") {
+            // Result already has "=" or "≈", just show "expression result"
+            format!("{} {}", expression, result)
+        } else {
+            // Result doesn't have prefix, add "="
+            format!("{} = {}", expression, result)
+        };
+        
+        // For clipboard, strip the prefix symbols but keep the rest
+        let value = result
+            .trim_start_matches("= ")
+            .trim_start_matches("≈ ")
+            .trim()
+            .to_string();
+        
+        Self {
+            name: display_name,
+            value,
+            base_score: 1000, // High priority for calculator results
+            icon_path: None,
+            app_bundle_path: None,
+            element_type: ElementType::CalculatorResult,
         }
     }
 

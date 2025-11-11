@@ -1,7 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::calculator::Calculator;
 use crate::config::{Color, Config};
-use crate::element::{Element, ElementList};
+use crate::element::{Element, ElementList, ElementType};
 use anyhow::Result;
 use log::{debug, info};
 use objc::declare::ClassDecl;
@@ -11,7 +12,7 @@ use objc2::rc::Retained;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSBezierPath, NSColor,
-    NSEvent, NSFont, NSScreen, NSView, NSWindow, NSWindowStyleMask,
+    NSEvent, NSFont, NSScreen, NSView, NSWindow, NSWindowStyleMask, NSPasteboard, NSPasteboardTypeString,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use cocoa::foundation::{NSRect as CocoaNSRect, NSRange};
@@ -20,7 +21,6 @@ use std::os::raw::c_void;
 use std::process::Command;
 
 // Application state
-#[derive(Debug)]
 struct AppState {
     config: Config,
     elements: ElementList,
@@ -32,11 +32,31 @@ struct AppState {
     window_height: f64,
     dynamic_max_results: usize,
     menubar_height: f64,  // Height to offset drawing from top
+    calculator: Option<Calculator>,
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("config", &self.config)
+            .field("elements", &self.elements)
+            .field("filtered_elements", &self.filtered_elements)
+            .field("selected_index", &self.selected_index)
+            .field("scroll_offset", &self.scroll_offset)
+            .field("query", &self.query)
+            .field("should_exit", &self.should_exit)
+            .field("window_height", &self.window_height)
+            .field("dynamic_max_results", &self.dynamic_max_results)
+            .field("menubar_height", &self.menubar_height)
+            .field("calculator", &"<Calculator>")
+            .finish()
+    }
 }
 
 impl AppState {
     fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64) -> Self {
         let font_size = config.font_size as f64; // Extract font_size before moving config
+        let calculator = Calculator::new().ok(); // Initialize calculator, ignore errors
         let mut state = Self {
             config,
             elements,
@@ -48,6 +68,7 @@ impl AppState {
             window_height,
             dynamic_max_results: Self::calculate_max_results(window_height, font_size, menubar_height),
             menubar_height,
+            calculator,
         };
         state.update_search();
         state
@@ -72,8 +93,24 @@ impl AppState {
     }
 
     fn update_search(&mut self) {
-        let results = self.elements.search(&self.query);
-        self.filtered_elements = results.into_iter().cloned().collect();
+        let mut results = self.elements.search(&self.query);
+        let mut filtered: Vec<Element> = results.into_iter().cloned().collect();
+        
+        // Try to evaluate as calculator expression if we have a calculator
+        if let Some(calc) = &mut self.calculator {
+            if !self.query.is_empty() {
+                if let Some(result) = calc.evaluate(&self.query) {
+                    // Add calculator result at the beginning
+                    let calc_element = Element::new_calculator_result(
+                        self.query.clone(),
+                        result,
+                    );
+                    filtered.insert(0, calc_element);
+                }
+            }
+        }
+        
+        self.filtered_elements = filtered;
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
@@ -101,17 +138,39 @@ impl AppState {
 
     fn execute_selected(&mut self) -> Result<()> {
         if let Some(element) = self.filtered_elements.get(self.selected_index) {
-            info!("Launching: {}", element.name);
+            match element.element_type {
+                ElementType::Application => {
+                    info!("Launching: {}", element.name);
 
-            let mut cmd = Command::new("open");
-            cmd.arg("-a").arg(&element.value);
+                    let mut cmd = Command::new("open");
+                    cmd.arg("-a").arg(&element.value);
 
-            match cmd.spawn() {
-                Ok(_) => {
-                    self.should_exit = true;
-                    Ok(())
+                    match cmd.spawn() {
+                        Ok(_) => {
+                            self.should_exit = true;
+                            Ok(())
+                        }
+                        Err(e) => Err(anyhow::anyhow!("Failed to launch application: {}", e)),
+                    }
                 }
-                Err(e) => Err(anyhow::anyhow!("Failed to launch application: {}", e)),
+                ElementType::CalculatorResult => {
+                    info!("Copying calculator result to clipboard: {}", element.value);
+                    
+                    // Copy to clipboard using NSPasteboard
+                    unsafe {
+                        let pasteboard = NSPasteboard::generalPasteboard();
+                        pasteboard.clearContents();
+                        let ns_string = NSString::from_str(&element.value);
+                        let success = pasteboard.setString_forType(&ns_string, NSPasteboardTypeString);
+                        
+                        if success {
+                            self.should_exit = true;
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("Failed to copy to clipboard"))
+                        }
+                    }
+                }
             }
         } else {
             Ok(())

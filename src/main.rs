@@ -4,6 +4,7 @@ use log::info;
 use std::path::PathBuf;
 
 mod apps;
+mod calculator;
 mod config;
 mod element;
 mod gui;
