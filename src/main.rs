@@ -11,6 +11,7 @@ mod gui;
 
 use apps::AppDiscovery;
 use config::Config;
+use element::ElementList;
 
 #[derive(Parser, Debug)]
 #[command(name = "kickoff")]
@@ -28,13 +29,9 @@ pub struct Args {
     #[arg(long)]
     include_path: bool,
 
-    /// Include applications in search (default: true, use --no-include-applications to disable)
-    #[arg(long, default_value_t = true)]
-    include_applications: bool,
-    
-    /// Disable application search
+    /// Include applications in search
     #[arg(long)]
-    no_include_applications: bool,
+    include_applications: bool,
 
     /// Show version information
     #[arg(short, long)]
@@ -65,16 +62,15 @@ async fn main() -> Result<()> {
     info!("Loaded configuration");
     
     // Discover applications based on flags
-    let include_apps = args.include_applications && !args.no_include_applications;
     let discovery = AppDiscovery::new(args.include_path);
-    let elements = match (include_apps, args.include_path) {
+    let elements = match (args.include_applications, args.include_path) {
         (true, true) => discovery.discover_all().await?,
         (true, false) => discovery.discover_apps_only().await?,
         (false, true) => discovery.discover_path_only().await?,
         (false, false) => {
-            // If both are disabled, default to applications only to prevent empty launcher
-            eprintln!("Warning: Both applications and PATH search are disabled. Defaulting to applications only.");
-            discovery.discover_apps_only().await?
+            // If both are disabled, return empty list
+            eprintln!("Warning: Both applications and PATH search are disabled. Use --include-applications and/or --include-path flags.");
+            ElementList::new()
         }
     };
     

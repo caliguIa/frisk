@@ -1,4 +1,4 @@
-use nucleo_matcher::{Config as MatcherConfig, Matcher, Utf32Str};
+use nucleo::{Config as NucleoConfig, Nucleo};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::path::PathBuf;
@@ -95,14 +95,14 @@ impl PartialOrd for Element {
 
 pub struct ElementList {
     inner: Vec<Element>,
-    matcher: Matcher,
+    nucleo: Nucleo<Element>,
 }
 
 impl std::fmt::Debug for ElementList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ElementList")
             .field("inner", &self.inner)
-            .field("matcher", &"<Nucleo::Matcher>")
+            .field("nucleo", &"<Nucleo>")
             .finish()
     }
 }
@@ -111,7 +111,12 @@ impl ElementList {
     pub fn new() -> Self {
         Self {
             inner: Vec::new(),
-            matcher: Matcher::new(MatcherConfig::DEFAULT),
+            nucleo: Nucleo::new(
+                NucleoConfig::DEFAULT,
+                std::sync::Arc::new(|| {}),
+                None,
+                1
+            ),
         }
     }
 
@@ -131,31 +136,45 @@ impl ElementList {
             return self.inner.iter().collect();
         }
 
-        // Convert query to lowercase for case-insensitive search
-        let query_lower = query.to_lowercase();
+        // Clear and re-inject all elements into nucleo
+        self.nucleo.restart(false);
+        let injector = self.nucleo.injector();
+        for element in &self.inner {
+            injector.push(element.clone(), |el, cols| {
+                cols[0] = el.name.clone().into();
+            });
+        }
+
+        // Update nucleo with the query
+        self.nucleo.pattern.reparse(
+            0,
+            query,
+            nucleo::pattern::CaseMatching::Ignore,
+            nucleo::pattern::Normalization::Smart,
+            false,
+        );
+
+        // Tick to process matches (10ms timeout)
+        self.nucleo.tick(10);
+
+        // Get snapshot of results (already sorted by score via nucleo)
+        let snapshot = self.nucleo.snapshot();
+        let match_count = snapshot.matched_item_count();
         
-        // Create UTF-32 buffers
-        let mut query_buf = Vec::new();
-        let mut element_buf = Vec::new();
-        let query_utf32 = Utf32Str::new(&query_lower, &mut query_buf);
-
-        let mut scored_results: Vec<(u16, &Element)> = self
-            .inner
-            .iter()
-            .filter_map(|element| {
-                // Reuse element buffer by clearing it
-                element_buf.clear();
-                // Convert element name to lowercase for case-insensitive matching
-                let element_name_lower = element.name.to_lowercase();
-                let element_name_utf32 = Utf32Str::new(&element_name_lower, &mut element_buf);
-                self.matcher
-                    .fuzzy_match(element_name_utf32, query_utf32)
-                    .map(|score| (score + element.base_score as u16, element))
-            })
-            .collect();
-
-        scored_results.sort_by(|a, b| b.0.cmp(&a.0));
-        scored_results.into_iter().map(|(_, element)| element).collect()
+        // Collect matched items - nucleo returns them pre-sorted by score
+        let mut results: Vec<&Element> = Vec::new();
+        for idx in 0..match_count {
+            if let Some(item) = snapshot.get_matched_item(idx) {
+                // Find the element in our inner vec by matching the data
+                if let Some(el) = self.inner.iter().find(|el| {
+                    el.name == item.data.name && el.value == item.data.value
+                }) {
+                    results.push(el);
+                }
+            }
+        }
+        
+        results
     }
 
     pub fn sort_by_score(&mut self) {
