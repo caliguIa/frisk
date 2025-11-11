@@ -1,0 +1,67 @@
+[package]
+name = "kickoff-macos"
+version = "0.1.0"
+authors = ["OpenCode Assistant"]
+edition = "2021"
+description = "Fast and minimal program launcher for macOS"
+license = "GPL-3.0-or-later"
+keywords = ["macos", "launcher", "spotlight", "application-launcher"]
+rust-version = "1.77"
+
+[[bin]]
+name = "kickoff"
+path = "src/main.rs"
+
+[dependencies]
+# Core functionality
+nucleo-matcher = "0.3"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+csv = "1.3"
+
+# macOS specific - objc2 ecosystem with objc for class declaration
+objc = "0.2"  # For ClassDecl - custom class definition
+cocoa = "0.25"  # For NSRect type in extern C functions
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+  "NSString",
+  "NSGeometry",
+  "NSObject",
+  "NSNotification",
+  "NSAttributedString",
+  "NSDictionary",
+  "NSValue",
+] }
+objc2-app-kit = { version = "0.3", features = [
+  "NSApplication",
+  "NSWindow",
+  "NSView",
+  "NSColor",
+  "NSFont",
+  "NSEvent",
+  "NSGraphics",
+  "NSBezierPath",
+  "NSScreen",
+  "NSResponder",
+] }
+objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
+plist = "1.6"
+
+# Async runtime
+tokio = { version = "1.44", features = [
+  "fs",
+  "rt-multi-thread",
+  "io-util",
+  "time",
+  "rt",
+  "macros",
+  "io-std",
+], default-features = false }
+
+[profile.release]
+lto = true
+debug = true
