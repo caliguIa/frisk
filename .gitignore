@@ -1,2 +1,5 @@
 target/
+result/
+result
+.direnv/
 *.md
