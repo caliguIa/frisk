@@ -11,6 +11,7 @@ pub struct Config {
     pub font_size: f32,
     pub styles: StyleConfig,
     pub spacing: SpacingConfig,
+    pub keymap: KeymapConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -32,6 +33,101 @@ pub struct SpacingConfig {
     pub window_padding_y: f32,
     pub prompt_to_items: f32,
     pub item_spacing: f32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct KeymapConfig {
+    pub exit: Vec<String>,
+    pub execute: Vec<String>,
+    pub nav_up: Vec<String>,
+    pub nav_down: Vec<String>,
+    pub autocomplete: Vec<String>,
+}
+
+impl Default for KeymapConfig {
+    fn default() -> Self {
+        Self {
+            exit: vec!["Escape".to_string()],
+            execute: vec!["Enter".to_string()],
+            nav_up: vec!["Up".to_string(), "ctrl+p".to_string()],
+            nav_down: vec!["Down".to_string(), "ctrl+n".to_string()],
+            autocomplete: vec!["Tab".to_string()],
+        }
+    }
+}
+
+/// Represents a key binding parsed from config
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeyBinding {
+    pub key_code: u16,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub cmd: bool,
+}
+
+impl KeyBinding {
+    /// Parse a key binding string like "ctrl+w" or "Backspace"
+    pub fn parse(binding: &str) -> Result<Self> {
+        let parts: Vec<&str> = binding.split('+').map(|s| s.trim()).collect();
+        
+        let mut ctrl = false;
+        let mut shift = false;
+        let mut alt = false;
+        let mut cmd = false;
+        let mut key_name = "";
+        
+        for part in &parts {
+            match part.to_lowercase().as_str() {
+                "ctrl" | "control" => ctrl = true,
+                "shift" => shift = true,
+                "alt" | "option" => alt = true,
+                "cmd" | "command" => cmd = true,
+                _ => key_name = part,
+            }
+        }
+        
+        let key_code = match key_name.to_lowercase().as_str() {
+            "escape" | "esc" => 53,
+            "enter" | "return" => 36,
+            "tab" => 48,
+            "backspace" | "delete" => 51,
+            "left" => 123,
+            "right" => 124,
+            "down" => 125,
+            "up" => 126,
+            "space" => 49,
+            // Letter keys (QWERTY layout)
+            "a" => 0, "b" => 11, "c" => 8, "d" => 2, "e" => 14,
+            "f" => 3, "g" => 5, "h" => 4, "i" => 34, "j" => 38,
+            "k" => 40, "l" => 37, "m" => 46, "n" => 45, "o" => 31,
+            "p" => 35, "q" => 12, "r" => 15, "s" => 1, "t" => 17,
+            "u" => 32, "v" => 9, "w" => 13, "x" => 7, "y" => 16,
+            "z" => 6,
+            // Number keys
+            "0" => 29, "1" => 18, "2" => 19, "3" => 20, "4" => 21,
+            "5" => 23, "6" => 22, "7" => 26, "8" => 28, "9" => 25,
+            _ => return Err(anyhow::anyhow!("Unknown key: {}", key_name)),
+        };
+        
+        Ok(KeyBinding {
+            key_code,
+            ctrl,
+            shift,
+            alt,
+            cmd,
+        })
+    }
+    
+    /// Check if this binding matches the given key event
+    pub fn matches(&self, key_code: u16, ctrl: bool, shift: bool, alt: bool, cmd: bool) -> bool {
+        self.key_code == key_code
+            && self.ctrl == ctrl
+            && self.shift == shift
+            && self.alt == alt
+            && self.cmd == cmd
+    }
 }
 
 
@@ -100,6 +196,7 @@ impl Default for Config {
             font_size: 32.0,
             styles: StyleConfig::default(),
             spacing: SpacingConfig::default(),
+            keymap: KeymapConfig::default(),
         }
     }
 }
@@ -202,5 +299,17 @@ impl Config {
         let mut color = Color::from_hex(&self.styles.selected_item)?;
         color.a = 0.3; // 30% opacity for selection background
         Ok(color)
+    }
+    
+    /// Check if a key event matches any binding for the given action
+    pub fn check_binding(&self, action_bindings: &[String], key_code: u16, ctrl: bool, shift: bool, alt: bool, cmd: bool) -> bool {
+        for binding_str in action_bindings {
+            if let Ok(binding) = KeyBinding::parse(binding_str) {
+                if binding.matches(key_code, ctrl, shift, alt, cmd) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }

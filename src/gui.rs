@@ -28,6 +28,7 @@ struct AppState {
     selected_index: usize,
     scroll_offset: usize,
     query: String,
+    cursor_position: usize,  // Cursor position in query string (byte index)
     should_exit: bool,
     window_height: f64,
     dynamic_max_results: usize,
@@ -44,6 +45,7 @@ impl std::fmt::Debug for AppState {
             .field("selected_index", &self.selected_index)
             .field("scroll_offset", &self.scroll_offset)
             .field("query", &self.query)
+            .field("cursor_position", &self.cursor_position)
             .field("should_exit", &self.should_exit)
             .field("window_height", &self.window_height)
             .field("dynamic_max_results", &self.dynamic_max_results)
@@ -64,6 +66,7 @@ impl AppState {
             selected_index: 0,
             scroll_offset: 0,
             query: String::new(),
+            cursor_position: 0,
             should_exit: false,
             window_height,
             dynamic_max_results: Self::calculate_max_results(window_height, font_size, menubar_height),
@@ -178,13 +181,97 @@ impl AppState {
     }
 
     fn delete_char(&mut self) {
-        self.query.pop();
+        if self.cursor_position > 0 {
+            // Find the character boundary before cursor
+            let byte_pos = self.cursor_position;
+            let mut new_pos = byte_pos;
+            while new_pos > 0 && !self.query.is_char_boundary(new_pos - 1) {
+                new_pos -= 1;
+            }
+            if new_pos > 0 {
+                new_pos -= 1;
+                while new_pos > 0 && !self.query.is_char_boundary(new_pos) {
+                    new_pos -= 1;
+                }
+            }
+            self.query.remove(new_pos);
+            self.cursor_position = new_pos;
+            self.update_search();
+        }
+    }
+
+    fn delete_word(&mut self) {
+        if self.cursor_position == 0 {
+            return;
+        }
+        
+        let byte_pos = self.cursor_position;
+        let before_cursor = &self.query[..byte_pos];
+        
+        // Find the start of the word to delete
+        let trimmed = before_cursor.trim_end();
+        if trimmed.is_empty() {
+            // Only whitespace before cursor, delete it all
+            self.query.drain(..byte_pos);
+            self.cursor_position = 0;
+        } else {
+            // Find last word boundary
+            let mut word_start = trimmed.len();
+            for (i, c) in trimmed.char_indices().rev() {
+                if c.is_whitespace() {
+                    word_start = i + c.len_utf8();
+                    break;
+                }
+                if i == 0 {
+                    word_start = 0;
+                }
+            }
+            self.query.drain(word_start..byte_pos);
+            self.cursor_position = word_start;
+        }
         self.update_search();
     }
 
+    fn delete_to_start(&mut self) {
+        if self.cursor_position > 0 {
+            self.query.drain(..self.cursor_position);
+            self.cursor_position = 0;
+            self.update_search();
+        }
+    }
+
     fn insert_char(&mut self, c: char) {
-        self.query.push(c);
+        self.query.insert(self.cursor_position, c);
+        self.cursor_position += c.len_utf8();
         self.update_search();
+    }
+
+    fn move_cursor_left(&mut self) {
+        if self.cursor_position > 0 {
+            let mut new_pos = self.cursor_position - 1;
+            while new_pos > 0 && !self.query.is_char_boundary(new_pos) {
+                new_pos -= 1;
+            }
+            self.cursor_position = new_pos;
+        }
+    }
+
+    fn move_cursor_right(&mut self) {
+        if self.cursor_position < self.query.len() {
+            let mut new_pos = self.cursor_position + 1;
+            while new_pos < self.query.len() && !self.query.is_char_boundary(new_pos) {
+                new_pos += 1;
+            }
+            self.cursor_position = new_pos;
+        }
+    }
+
+    fn autocomplete_with_selected(&mut self) {
+        if let Some(element) = self.filtered_elements.get(self.selected_index) {
+            self.query = element.name.clone();
+            self.cursor_position = self.query.len();
+            self.update_search();
+        }
     }
 }
 
@@ -266,8 +353,9 @@ impl CustomView {
                 &state.config.font_family,
             );
 
-            // Draw cursor - position after the entire prompt+query text
-            let cursor_x = padding + measure_text_width(&prompt_text, state.config.font_size as f64, &state.config.font_family);
+            // Draw cursor - position based on cursor_position in query
+            let text_before_cursor = format!("{}{}", state.config.prompt, &state.query[..state.cursor_position]);
+            let cursor_x = padding + measure_text_width(&text_before_cursor, state.config.font_size as f64, &state.config.font_family);
             draw_cursor(cursor_x, prompt_y, &state.config.caret_color().unwrap_or_else(|_| Color::rgb(224, 108, 117)), state.config.font_size as f64);
 
             // Draw results with scrolling - using config spacing
@@ -340,49 +428,104 @@ impl CustomView {
             let event = &*event;
 
             let key_code = event.keyCode();
-            info!("Key down: keyCode={}", key_code);
+            let modifiers = event.modifierFlags();
+            let ctrl_pressed = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Control);
+            let shift_pressed = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Shift);
+            let alt_pressed = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Option);
+            let cmd_pressed = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Command);
+            
+            info!("Key down: keyCode={}, ctrl={}, shift={}, alt={}, cmd={}", 
+                  key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed);
 
             let mut state = state_cell.borrow_mut();
 
-            // Handle special keys
-            match key_code {
-                53 => {
-                    // Escape
-                    state.should_exit = true;
+            // Check keymap bindings
+            let config = &state.config;
+            
+            // Exit
+            if config.check_binding(&config.keymap.exit, key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed) {
+                state.should_exit = true;
+                let mtm = MainThreadMarker::new().unwrap();
+                let app = NSApplication::sharedApplication(mtm);
+                app.terminate(None);
+                return;
+            }
+            
+            // Execute
+            if config.check_binding(&config.keymap.execute, key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed) {
+                if let Err(e) = state.execute_selected() {
+                    log::error!("Failed to execute: {}", e);
+                }
+                if state.should_exit {
                     let mtm = MainThreadMarker::new().unwrap();
                     let app = NSApplication::sharedApplication(mtm);
                     app.terminate(None);
-                    return;
                 }
-                36 => {
-                    // Return/Enter
-                    if let Err(e) = state.execute_selected() {
-                        log::error!("Failed to execute: {}", e);
-                    }
-                    if state.should_exit {
-                        let mtm = MainThreadMarker::new().unwrap();
-                        let app = NSApplication::sharedApplication(mtm);
-                        app.terminate(None);
-                    }
-                    return;
-                }
+                return;
+            }
+            
+            // Nav up
+            if config.check_binding(&config.keymap.nav_up, key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed) {
+                state.nav_up();
+                drop(state);
+                let _: () = msg_send![this, setNeedsDisplay: true];
+                return;
+            }
+            
+            // Nav down
+            if config.check_binding(&config.keymap.nav_down, key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed) {
+                state.nav_down();
+                drop(state);
+                let _: () = msg_send![this, setNeedsDisplay: true];
+                return;
+            }
+            
+            // Autocomplete
+            if config.check_binding(&config.keymap.autocomplete, key_code, ctrl_pressed, shift_pressed, alt_pressed, cmd_pressed) {
+                state.autocomplete_with_selected();
+                drop(state);
+                let _: () = msg_send![this, setNeedsDisplay: true];
+                return;
+            }
+            
+            // Hardcoded essential keys (not configurable)
+            match key_code {
                 51 => {
-                    // Delete/Backspace
-                    state.delete_char();
+                    // Backspace - delete character
+                    if ctrl_pressed {
+                        // Ctrl+Backspace - delete word
+                        state.delete_word();
+                    } else {
+                        state.delete_char();
+                    }
                     drop(state);
                     let _: () = msg_send![this, setNeedsDisplay: true];
                     return;
                 }
-                125 => {
-                    // Down arrow
-                    state.nav_down();
+                123 => {
+                    // Left arrow - move cursor left
+                    state.move_cursor_left();
                     drop(state);
                     let _: () = msg_send![this, setNeedsDisplay: true];
                     return;
                 }
-                126 => {
-                    // Up arrow
-                    state.nav_up();
+                124 => {
+                    // Right arrow - move cursor right
+                    state.move_cursor_right();
+                    drop(state);
+                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    return;
+                }
+                13 if ctrl_pressed => {
+                    // Ctrl+W - delete word
+                    state.delete_word();
+                    drop(state);
+                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    return;
+                }
+                32 if ctrl_pressed => {
+                    // Ctrl+U - delete to start
+                    state.delete_to_start();
                     drop(state);
                     let _: () = msg_send![this, setNeedsDisplay: true];
                     return;
@@ -390,11 +533,12 @@ impl CustomView {
                 _ => {}
             }
 
-            // Handle text input
+            // Handle text input - accept all graphic characters and space (not just ASCII)
             if let Some(characters) = event.characters() {
                 let text = characters.to_string();
                 for c in text.chars() {
-                    if c.is_ascii_graphic() || c == ' ' {
+                    // Accept all printable characters including unicode (e.g., £, €, etc.)
+                    if !c.is_control() && c != '\u{007f}' {
                         state.insert_char(c);
                     }
                 }
