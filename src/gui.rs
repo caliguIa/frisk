@@ -57,14 +57,17 @@ impl AppState {
         // Calculate based on actual layout measurements
         let line_height = font_size + 15.0; // Match item_spacing in config (default 15.0)
         
-        // Actual space used:
+        // Actual space used - optimized to fit more items:
         // - Top padding: 20 (window_padding_y)
         // - Prompt height: ~font_size
-        // - Prompt to items: 60 (prompt_to_items in config)
-        // - Bottom padding: 20 (window_padding_y)
-        let overhead = 20.0 + font_size + 60.0 + 20.0;
+        // - Prompt to items: ~40 (accounting for some overlap/optimization)
+        let overhead = 20.0 + font_size + 40.0; // Reduced from 60 to 40
         let available_height = window_height - overhead - menubar_height;
         let max_results = (available_height / line_height).floor() as usize;
+        
+        info!("Max results calculation: window_height={}, font_size={}, menubar_height={}, line_height={}, overhead={}, available_height={}, max_results={}",
+              window_height, font_size, menubar_height, line_height, overhead, available_height, max_results);
+        
         max_results.max(3).min(25) // Minimum 3, maximum 25 results
     }
 
