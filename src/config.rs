@@ -22,6 +22,7 @@ pub struct StyleConfig {
     pub prompt: String,
     pub query: String,
     pub caret: String,
+    pub window_opacity: f32,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -66,8 +67,8 @@ impl Color {
         }
     }
 
-    /// Parse a hex color string (with or without alpha) into a Color
-    /// Supports formats: #RGB, #RGBA, #RRGGBB, #RRGGBBAA
+    /// Parse a hex color string into a Color (RGB only, no alpha)
+    /// Supports formats: #RGB, #RRGGBB
     pub fn from_hex(hex: &str) -> Result<Self> {
         let hex = hex.trim_start_matches('#');
         
@@ -79,28 +80,12 @@ impl Color {
                 let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)?;
                 Ok(Self::rgb(r, g, b))
             }
-            4 => {
-                // #RGBA -> #RRGGBBAA
-                let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)?;
-                let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)?;
-                let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)?;
-                let a = u8::from_str_radix(&hex[3..4].repeat(2), 16)?;
-                Ok(Self::rgba(r, g, b, a))
-            }
             6 => {
                 // #RRGGBB
                 let r = u8::from_str_radix(&hex[0..2], 16)?;
                 let g = u8::from_str_radix(&hex[2..4], 16)?;
                 let b = u8::from_str_radix(&hex[4..6], 16)?;
                 Ok(Self::rgb(r, g, b))
-            }
-            8 => {
-                // #RRGGBBAA
-                let r = u8::from_str_radix(&hex[0..2], 16)?;
-                let g = u8::from_str_radix(&hex[2..4], 16)?;
-                let b = u8::from_str_radix(&hex[4..6], 16)?;
-                let a = u8::from_str_radix(&hex[6..8], 16)?;
-                Ok(Self::rgba(r, g, b, a))
             }
             _ => Err(anyhow::anyhow!("Invalid hex color format: #{}", hex)),
         }
@@ -122,12 +107,13 @@ impl Default for Config {
 impl Default for StyleConfig {
     fn default() -> Self {
         Self {
-            background: "#282c34f0".to_string(), // Dark background with alpha
+            background: "#282c34".to_string(), // Dark background (no alpha)
             items: "#ffffff".to_string(), // White text for items
             selected_item: "#61afef".to_string(), // Blue for selected item
             prompt: "#98c379".to_string(), // Green for prompt
             query: "#e06c75".to_string(), // Red for query text
             caret: "#e06c75".to_string(), // Red for caret
+            window_opacity: 0.85, // Default 85% opacity
         }
     }
 }
@@ -186,7 +172,9 @@ impl Config {
 
     // Helper methods to convert hex strings to Color objects
     pub fn background_color(&self) -> Result<Color> {
-        Color::from_hex(&self.styles.background)
+        let mut color = Color::from_hex(&self.styles.background)?;
+        color.a = self.styles.window_opacity.max(0.0).min(1.0); // Clamp to 0.0-1.0
+        Ok(color)
     }
 
     pub fn items_color(&self) -> Result<Color> {

@@ -188,7 +188,7 @@ impl CustomView {
             );
 
             // Fill background
-            let bg_color = nscolor_from_config(&state.config.background_color().unwrap_or_else(|_| Color::rgba(40, 44, 52, 240)));
+            let bg_color = nscolor_from_config(&state.config.background_color().unwrap_or_else(|_| Color::rgb(40, 44, 52)));
             bg_color.setFill();
             NSBezierPath::fillRect(bounds);
             
@@ -227,36 +227,22 @@ impl CustomView {
             {
                 let y = results_start_y - (display_i as f64 * line_height);
 
-                if actual_i == state.selected_index {
-                    // Draw selection background
-                    let sel_rect = NSRect::new(
-                        NSPoint::new(padding, y - (state.config.font_size as f64 * 0.2)), 
-                        NSSize::new(bounds.size.width - (padding * 2.0), line_height)
-                    );
-                    let sel_color = nscolor_from_config(&state.config.selection_background_color().unwrap_or_else(|_| Color::rgba(97, 175, 239, 80)));
-                    sel_color.setFill();
-                    NSBezierPath::fillRect(sel_rect);
-
-                    // Draw selected item text
-                    draw_text(
-                        &element.name,
-                        padding,
-                        y,
-                        &state.config.selected_item_color().unwrap_or_else(|_| Color::rgb(97, 175, 239)),
-                        state.config.font_size as f64,
-                        &state.config.font_family,
-                    );
+                // Determine text color based on selection
+                let text_color = if actual_i == state.selected_index {
+                    &state.config.selected_item_color().unwrap_or_else(|_| Color::rgb(97, 175, 239))
                 } else {
-                    // Draw normal item text
-                    draw_text(
-                        &element.name,
-                        padding,
-                        y,
-                        &state.config.items_color().unwrap_or_else(|_| Color::rgb(255, 255, 255)),
-                        state.config.font_size as f64,
-                        &state.config.font_family,
-                    );
-                }
+                    &state.config.items_color().unwrap_or_else(|_| Color::rgb(255, 255, 255))
+                };
+
+                // Draw item text
+                draw_text(
+                    &element.name,
+                    padding,
+                    y,
+                    text_color,
+                    state.config.font_size as f64,
+                    &state.config.font_family,
+                );
             }
 
             // Draw "no results" message if needed
@@ -645,8 +631,13 @@ pub fn run(config: Config, elements: ElementList) -> Result<()> {
     // NSFloatingWindowLevel = 3 (can overlap menubar)
     // Use normal level so window stays below menubar
     window.setLevel(0); // Normal window level - respects menubar
-    // Use background color from new styles config
-    let bg_color = config.background_color().unwrap_or_else(|_| Color::rgba(40, 44, 52, 240));
+    
+    // Set window opacity from config
+    let opacity = config.styles.window_opacity.max(0.0).min(1.0);
+    window.setAlphaValue(opacity as f64);
+    
+    // Use background color from styles config (no alpha in color itself)
+    let bg_color = config.background_color().unwrap_or_else(|_| Color::rgb(40, 44, 52));
     window.setBackgroundColor(Some(&nscolor_from_config(&bg_color)));
     window.setOpaque(false);
     window.setHasShadow(true);
