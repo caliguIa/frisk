@@ -1,16 +1,13 @@
 use super::rendering::{draw_cursor, draw_text, measure_text_width, nscolor_from_config};
 use super::state::AppState;
-use crate::config::{Color, Config};
+use crate::config::Config;
 use crate::element::ElementList;
-use cocoa::foundation::NSRect as CocoaNSRect;
 use log::{debug, info};
-use objc::declare::ClassDecl;
-use objc::runtime::{Class, Object, Sel};
-use objc::{class, msg_send, sel, sel_impl};
-use objc2_app_kit::{NSBezierPath, NSEvent};
-use objc2_foundation::{NSPoint, NSRect, NSSize};
+use objc2::rc::Retained;
+use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
+use objc2_app_kit::{NSBezierPath, NSEvent, NSView};
+use objc2_foundation::NSRect;
 use std::cell::RefCell;
-use std::os::raw::c_void;
 
 const KEY_ESCAPE: u16 = 53;
 const KEY_ENTER: u16 = 36;
@@ -21,56 +18,22 @@ const KEY_RIGHT: u16 = 124;
 const KEY_DOWN: u16 = 125;
 const KEY_UP: u16 = 126;
 
-pub struct CustomView;
+pub struct Ivars {
+    state: RefCell<AppState>,
+}
 
-impl CustomView {
-    const NAME: &'static str = "KickoffCustomView";
+define_class!(
+    #[unsafe(super(NSView))]
+    #[ivars = Ivars]
+    #[name = "KickoffCustomView"]
+    pub struct CustomView;
 
-    fn define_class() -> &'static Class {
-        let mut decl = ClassDecl::new(Self::NAME, class!(NSView))
-            .unwrap_or_else(|| panic!("Unable to register {} class", Self::NAME));
+    impl CustomView {
+        #[unsafe(method(drawRect:))]
+        fn draw_rect(&self, _dirty_rect: NSRect) {
+            let state = self.ivars().state.borrow();
 
-        decl.add_ivar::<*mut c_void>("state_ptr");
-
-        unsafe {
-            decl.add_method(
-                sel!(drawRect:),
-                Self::draw_rect as extern "C" fn(&Object, Sel, CocoaNSRect),
-            );
-
-            decl.add_method(
-                sel!(acceptsFirstResponder),
-                Self::accepts_first_responder as extern "C" fn(&Object, Sel) -> bool,
-            );
-
-            decl.add_method(
-                sel!(becomeFirstResponder),
-                Self::become_first_responder as extern "C" fn(&Object, Sel) -> bool,
-            );
-
-            decl.add_method(
-                sel!(keyDown:),
-                Self::key_down as extern "C" fn(&mut Object, Sel, *mut Object),
-            );
-        }
-
-        decl.register()
-    }
-
-    extern "C" fn draw_rect(this: &Object, _sel: Sel, _dirty_rect: CocoaNSRect) {
-        unsafe {
-            let state_ptr: *mut c_void = *this.get_ivar("state_ptr");
-            if state_ptr.is_null() {
-                return;
-            }
-            let state = &*(state_ptr as *const RefCell<AppState>);
-            let state = state.borrow();
-
-            let bounds_cocoa: CocoaNSRect = msg_send![this, bounds];
-            let bounds = NSRect::new(
-                NSPoint::new(bounds_cocoa.origin.x, bounds_cocoa.origin.y),
-                NSSize::new(bounds_cocoa.size.width, bounds_cocoa.size.height),
-            );
+            let bounds = self.bounds();
 
             let bg_color = nscolor_from_config(&state.config.background_color());
             bg_color.setFill();
@@ -138,25 +101,20 @@ impl CustomView {
                 );
             }
         }
-    }
 
-    extern "C" fn accepts_first_responder(_this: &Object, _sel: Sel) -> bool {
-        true
-    }
+        #[unsafe(method(acceptsFirstResponder))]
+        fn accepts_first_responder(&self) -> bool {
+            true
+        }
 
-    extern "C" fn become_first_responder(_this: &Object, _sel: Sel) -> bool {
-        debug!("View became first responder");
-        true
-    }
+        #[unsafe(method(becomeFirstResponder))]
+        fn become_first_responder(&self) -> bool {
+            debug!("View became first responder");
+            true
+        }
 
-    extern "C" fn key_down(this: &mut Object, _sel: Sel, event: *mut Object) {
-        unsafe {
-            let state_ptr: *mut c_void = *this.get_ivar("state_ptr");
-            if state_ptr.is_null() {
-                return;
-            }
-            let state_cell = &*(state_ptr as *const RefCell<AppState>);
-            let event = &*(event as *const NSEvent);
+        #[unsafe(method(keyDown:))]
+        fn key_down(&self, event: &NSEvent) {
             let key_code = event.keyCode();
             let modifiers = event.modifierFlags();
             
@@ -164,62 +122,56 @@ impl CustomView {
             
             info!("Key: code={}, ctrl={}", key_code, ctrl);
 
-            let mut state = state_cell.borrow_mut();
-            
             match key_code {
                 KEY_ESCAPE => {
-                    drop(state);
-                    state_cell.borrow().terminate();
+                    self.ivars().state.borrow().terminate();
                     return;
                 }
                 KEY_ENTER => {
+                    let mut state = self.ivars().state.borrow_mut();
                     if let Err(e) = state.execute_selected() {
                         log::error!("Failed to execute: {}", e);
                     }
                     if state.should_exit {
                         drop(state);
-                        state_cell.borrow().terminate();
+                        self.ivars().state.borrow().terminate();
                     }
                     return;
                 }
                 KEY_UP => {
-                    state.nav_up();
-                    drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.ivars().state.borrow_mut().nav_up();
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_DOWN => {
-                    state.nav_down();
-                    drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.ivars().state.borrow_mut().nav_down();
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_TAB => {
-                    state.autocomplete();
-                    drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.ivars().state.borrow_mut().autocomplete();
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_BACKSPACE => {
+                    let mut state = self.ivars().state.borrow_mut();
                     if ctrl {
                         state.delete_word();
                     } else {
                         state.delete_char();
                     }
                     drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_LEFT => {
-                    state.move_cursor_left();
-                    drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.ivars().state.borrow_mut().move_cursor_left();
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_RIGHT => {
-                    state.move_cursor_right();
-                    drop(state);
-                    let _: () = msg_send![this, setNeedsDisplay: true];
+                    self.ivars().state.borrow_mut().move_cursor_right();
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 _ => {}
@@ -227,33 +179,26 @@ impl CustomView {
 
             if let Some(characters) = event.characters() {
                 let text = characters.to_string();
+                let mut state = self.ivars().state.borrow_mut();
                 for c in text.chars() {
                     if !c.is_control() && c != '\u{007f}' {
                         state.insert_char(c);
                     }
                 }
                 drop(state);
-                let _: () = msg_send![this, setNeedsDisplay: true];
+                self.setNeedsDisplay(true);
             }
         }
     }
+);
 
-    fn class() -> &'static Class {
-        Class::get(Self::NAME).unwrap_or_else(Self::define_class)
-    }
-
-    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64) -> *mut Object {
-        unsafe {
-            let view: *mut Object = msg_send![Self::class(), alloc];
-            let view: *mut Object = msg_send![view, init];
-
-            let state = AppState::new(config, elements, window_height, menubar_height);
-            let state = Box::new(RefCell::new(state));
-            let state_ptr = Box::into_raw(state) as *mut c_void;
-
-            (*view).set_ivar("state_ptr", state_ptr);
-
-            view
-        }
+impl CustomView {
+    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64) -> Retained<Self> {
+        let state = AppState::new(config, elements, window_height, menubar_height);
+        let mtm = unsafe { objc2::MainThreadMarker::new_unchecked() };
+        let this = Self::alloc(mtm).set_ivars(Ivars {
+            state: RefCell::new(state),
+        });
+        unsafe { msg_send![super(this), init] }
     }
 }

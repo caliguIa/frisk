@@ -20,8 +20,6 @@ toml = "0.8"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"
-objc = "0.2"
-cocoa = "0.25"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSGeometry"] }
 objc2-app-kit = { version = "0.3", features = [

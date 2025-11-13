@@ -3,17 +3,16 @@ mod state;
 mod view;
 mod window;
 
-use crate::config::{Color, Config};
+use crate::config::Config;
 use crate::element::ElementList;
 use anyhow::Result;
 use log::info;
-use objc::runtime::Object;
-use objc::{msg_send, sel, sel_impl};
 use objc2::rc::Retained;
 use objc2::MainThreadMarker;
+use objc2::{msg_send, ClassType};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSEvent, NSScreen, NSView,
-    NSWindow, NSWindowStyleMask,
+    NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSEvent, NSScreen, NSWindow,
+    NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 use rendering::nscolor_from_config;
@@ -43,32 +42,30 @@ pub fn run(config: Config, elements: ElementList) -> Result<()> {
     let window = create_window(window_rect, &config)?;
     let custom_view = CustomView::new(config, elements, window_rect.size.height, menubar_height);
 
-    setup_window_content(&window, custom_view, window_rect);
-    activate_window(&app, &window, custom_view);
+    setup_window_content(&window, custom_view.clone(), window_rect);
+    activate_window(&app, &window, &custom_view);
 
     app.run();
     Ok(())
 }
 
 fn find_active_screen(mtm: MainThreadMarker) -> Retained<NSScreen> {
-    unsafe {
-        let mouse_location = NSEvent::mouseLocation();
-        let screens = NSScreen::screens(mtm);
+    let mouse_location = NSEvent::mouseLocation();
+    let screens = NSScreen::screens(mtm);
 
-        for i in 0..screens.count() {
-            let screen = screens.objectAtIndex(i);
-            let frame = screen.frame();
-            if mouse_location.x >= frame.origin.x
-                && mouse_location.x <= frame.origin.x + frame.size.width
-                && mouse_location.y >= frame.origin.y
-                && mouse_location.y <= frame.origin.y + frame.size.height
-            {
-                return screen;
-            }
+    for i in 0..screens.count() {
+        let screen = screens.objectAtIndex(i);
+        let frame = screen.frame();
+        if mouse_location.x >= frame.origin.x
+            && mouse_location.x <= frame.origin.x + frame.size.width
+            && mouse_location.y >= frame.origin.y
+            && mouse_location.y <= frame.origin.y + frame.size.height
+        {
+            return screen;
         }
-
-        NSScreen::mainScreen(mtm).unwrap()
     }
+
+    NSScreen::mainScreen(mtm).unwrap()
 }
 
 fn calculate_window_rect(screen: &NSScreen) -> NSRect {
@@ -86,23 +83,22 @@ fn calculate_menubar_height(screen: &NSScreen) -> f64 {
 }
 
 fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
-    let window_ptr: *mut Object = unsafe {
-        let window: *mut Object = msg_send![CustomWindow::class(), alloc];
-        msg_send![window,
-            initWithContentRect: rect
-            styleMask: NSWindowStyleMask::Borderless
-            backing: NSBackingStoreType::Buffered
+    let window: Retained<NSWindow> = unsafe {
+        let cls = CustomWindow::class();
+        msg_send![
+            msg_send![cls, alloc],
+            initWithContentRect: rect,
+            styleMask: NSWindowStyleMask::Borderless,
+            backing: NSBackingStoreType::Buffered,
             defer: false
         ]
     };
 
-    let window = unsafe { Retained::from_raw(window_ptr as *mut NSWindow).unwrap() };
-
     window.setLevel(0);
-    
+
     let opacity = (config.styles.window_opacity as f64 / 100.0).clamp(0.0, 1.0);
     window.setAlphaValue(opacity);
-    
+
     let bg_color = config.background_color();
     window.setBackgroundColor(Some(&nscolor_from_config(&bg_color)));
     window.setOpaque(false);
@@ -112,9 +108,8 @@ fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
     window.setFrame_display(rect, false);
 
     unsafe {
-        let window_ptr = window.as_ref() as *const NSWindow as *mut Object;
-        let _: () = msg_send![window_ptr, setMovable: false];
-        let _: () = msg_send![window_ptr, setCollectionBehavior: 1 | 4];
+        let () = msg_send![&window, setMovable: false];
+        let () = msg_send![&window, setCollectionBehavior: 1 | 4];
     }
 
     if let Some(content_view) = window.contentView() {
@@ -127,24 +122,20 @@ fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
     Ok(window)
 }
 
-fn setup_window_content(window: &NSWindow, custom_view: *mut Object, rect: NSRect) {
+fn setup_window_content(window: &NSWindow, custom_view: Retained<CustomView>, rect: NSRect) {
     unsafe {
-        let _: () = msg_send![custom_view, setFrame: rect];
-        let custom_view_nsview = custom_view as *mut NSView;
-        let custom_view_retained = Retained::from_raw(custom_view_nsview).unwrap();
-        window.setContentView(Some(&custom_view_retained));
-        std::mem::forget(custom_view_retained);
+        let () = msg_send![&custom_view, setFrame: rect];
+        window.setContentView(Some(&custom_view));
     }
 }
 
-fn activate_window(app: &NSApplication, window: &NSWindow, custom_view: *mut Object) {
+fn activate_window(app: &NSApplication, window: &NSWindow, custom_view: &CustomView) {
     app.activateIgnoringOtherApps(true);
     window.makeKeyAndOrderFront(None);
     window.orderFrontRegardless();
     window.makeKeyWindow();
 
     unsafe {
-        let window_ptr = window as *const NSWindow as *mut Object;
-        let _: () = msg_send![window_ptr, makeFirstResponder: custom_view];
+        let () = msg_send![window, makeFirstResponder: custom_view];
     }
 }

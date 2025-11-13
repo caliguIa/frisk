@@ -1,43 +1,23 @@
 use log::debug;
-use objc::declare::ClassDecl;
-use objc::runtime::{Class, Object, Sel};
-use objc::{class, sel, sel_impl};
+use objc2::{define_class, MainThreadOnly};
+use objc2_app_kit::NSPanel;
 
-pub struct CustomWindow;
+define_class!(
+    #[unsafe(super(NSPanel))]
+    #[name = "KickoffCustomWindow"]
+    pub struct CustomWindow;
 
-impl CustomWindow {
-    const NAME: &'static str = "KickoffCustomWindow";
-
-    fn define_class() -> &'static Class {
-        let mut decl = ClassDecl::new(Self::NAME, class!(NSPanel))
-            .unwrap_or_else(|| panic!("Unable to register {} class", Self::NAME));
-
-        unsafe {
-            decl.add_method(
-                sel!(canBecomeKeyWindow),
-                Self::can_become_key_window as extern "C" fn(&Object, Sel) -> bool,
-            );
-
-            decl.add_method(
-                sel!(canBecomeMainWindow),
-                Self::can_become_main_window as extern "C" fn(&Object, Sel) -> bool,
-            );
+    impl CustomWindow {
+        #[unsafe(method(canBecomeKeyWindow))]
+        fn can_become_key_window(&self) -> bool {
+            debug!("canBecomeKeyWindow called");
+            true
         }
 
-        decl.register()
+        #[unsafe(method(canBecomeMainWindow))]
+        fn can_become_main_window(&self) -> bool {
+            debug!("canBecomeMainWindow called");
+            true
+        }
     }
-
-    extern "C" fn can_become_key_window(_this: &Object, _sel: Sel) -> bool {
-        debug!("canBecomeKeyWindow called");
-        true
-    }
-
-    extern "C" fn can_become_main_window(_this: &Object, _sel: Sel) -> bool {
-        debug!("canBecomeMainWindow called");
-        true
-    }
-
-    pub fn class() -> &'static Class {
-        Class::get(Self::NAME).unwrap_or_else(Self::define_class)
-    }
-}
+);
