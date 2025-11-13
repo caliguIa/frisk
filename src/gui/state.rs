@@ -23,7 +23,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64) -> Self {
+    pub fn new(
+        config: Config,
+        elements: ElementList,
+        window_height: f64,
+        menubar_height: f64,
+    ) -> Self {
         let font_size = config.font_size as f64;
         let calculator = Calculator::new().ok();
         let mut state = Self {
@@ -35,7 +40,11 @@ impl AppState {
             query: String::new(),
             cursor_position: 0,
             should_exit: false,
-            dynamic_max_results: Self::calculate_max_results(window_height, font_size, menubar_height),
+            dynamic_max_results: Self::calculate_max_results(
+                window_height,
+                font_size,
+                menubar_height,
+            ),
             menubar_height,
             calculator,
         };
@@ -48,19 +57,19 @@ impl AppState {
         let overhead = 20.0 + font_size + 40.0;
         let available_height = window_height - overhead - menubar_height;
         let max_results = (available_height / line_height).floor() as usize;
-        
+
         info!(
             "Max results: window={}, font={}, available={}, max={}",
             window_height, font_size, available_height, max_results
         );
-        
+
         max_results.clamp(3, 25)
     }
 
     pub fn update_search(&mut self) {
         let results = self.elements.search(&self.query);
         let mut filtered: Vec<Element> = results.into_iter().cloned().collect();
-        
+
         if let Some(calc) = &mut self.calculator {
             if !self.query.is_empty() {
                 if let Some(result) = calc.evaluate(&self.query) {
@@ -69,7 +78,7 @@ impl AppState {
                 }
             }
         }
-        
+
         self.filtered_elements = filtered;
         self.selected_index = 0;
         self.scroll_offset = 0;
@@ -108,15 +117,13 @@ impl AppState {
                 }
                 ElementType::CalculatorResult => {
                     info!("Copying: {}", element.value);
-                    unsafe {
-                        let pasteboard = NSPasteboard::generalPasteboard();
-                        pasteboard.clearContents();
-                        let ns_string = NSString::from_str(&element.value);
-                        if pasteboard.setString_forType(&ns_string, NSPasteboardTypeString) {
-                            self.should_exit = true;
-                        } else {
-                            return Err(anyhow::anyhow!("Failed to copy"));
-                        }
+                    let pasteboard = NSPasteboard::generalPasteboard();
+                    pasteboard.clearContents();
+                    let ns_string = NSString::from_str(&element.value);
+                    if unsafe { pasteboard.setString_forType(&ns_string, NSPasteboardTypeString) } {
+                        self.should_exit = true;
+                    } else {
+                        return Err(anyhow::anyhow!("Failed to copy"));
                     }
                 }
             }
@@ -140,10 +147,10 @@ impl AppState {
         if self.cursor_position == 0 {
             return;
         }
-        
+
         let before_cursor = &self.query[..self.cursor_position];
         let trimmed = before_cursor.trim_end();
-        
+
         if trimmed.is_empty() {
             self.query.drain(..self.cursor_position);
             self.cursor_position = 0;

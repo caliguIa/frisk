@@ -42,7 +42,7 @@ define_class!(
             let padding = state.config.spacing.window_padding as f64;
             let prompt_y = bounds.size.height - padding - state.menubar_height;
             let prompt_text = format!("{}{}", state.config.prompt, state.query);
-            
+
             draw_text(
                 &prompt_text,
                 padding,
@@ -117,9 +117,9 @@ define_class!(
         fn key_down(&self, event: &NSEvent) {
             let key_code = event.keyCode();
             let modifiers = event.modifierFlags();
-            
+
             let ctrl = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Control);
-            
+
             info!("Key: code={}, ctrl={}", key_code, ctrl);
 
             match key_code {
@@ -193,7 +193,13 @@ define_class!(
 );
 
 impl CustomView {
-    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64, mtm: objc2::MainThreadMarker) -> Retained<Self> {
+    pub fn new(
+        config: Config,
+        elements: ElementList,
+        window_height: f64,
+        menubar_height: f64,
+        mtm: objc2::MainThreadMarker,
+    ) -> Retained<Self> {
         let state = AppState::new(config, elements, window_height, menubar_height);
         let this = Self::alloc(mtm).set_ivars(Ivars {
             state: RefCell::new(state),
