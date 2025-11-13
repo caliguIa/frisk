@@ -40,7 +40,7 @@ pub fn run(config: Config, elements: ElementList) -> Result<()> {
     );
 
     let window = create_window(window_rect, &config)?;
-    let custom_view = CustomView::new(config, elements, window_rect.size.height, menubar_height);
+    let custom_view = CustomView::new(config, elements, window_rect.size.height, menubar_height, mtm);
 
     setup_window_content(&window, custom_view.clone(), window_rect);
     activate_window(&app, &window, &custom_view);
@@ -83,6 +83,9 @@ fn calculate_menubar_height(screen: &NSScreen) -> f64 {
 }
 
 fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
+    // SAFETY: Window initialization via alloc+init is safe. The nested msg_send pattern
+    // is required because alloc returns Allocated<T> which needs initialization.
+    // CustomWindow is a properly defined class via define_class! macro.
     let window: Retained<NSWindow> = unsafe {
         let cls = CustomWindow::class();
         msg_send![
@@ -107,6 +110,9 @@ fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
     window.setIgnoresMouseEvents(false);
     window.setFrame_display(rect, false);
 
+    // SAFETY: These methods are not exposed as safe wrappers in objc2-app-kit.
+    // setMovable prevents window dragging, setCollectionBehavior configures window manager behavior
+    // (1 = NSWindowCollectionBehaviorCanJoinAllSpaces, 4 = NSWindowCollectionBehaviorFullScreenAuxiliary)
     unsafe {
         let () = msg_send![&window, setMovable: false];
         let () = msg_send![&window, setCollectionBehavior: 1 | 4];
@@ -123,10 +129,14 @@ fn create_window(rect: NSRect, config: &Config) -> Result<Retained<NSWindow>> {
 }
 
 fn setup_window_content(window: &NSWindow, custom_view: Retained<CustomView>, rect: NSRect) {
+    // SAFETY: NSView::setFrame is not exposed as a safe wrapper in objc2-app-kit.
+    // This sets the view's frame to match the window's content area.
     unsafe {
         let () = msg_send![&custom_view, setFrame: rect];
-        window.setContentView(Some(&custom_view));
     }
+    
+    // Safe: setContentView has a safe wrapper
+    window.setContentView(Some(&custom_view));
 }
 
 fn activate_window(app: &NSApplication, window: &NSWindow, custom_view: &CustomView) {
@@ -135,6 +145,8 @@ fn activate_window(app: &NSApplication, window: &NSWindow, custom_view: &CustomV
     window.orderFrontRegardless();
     window.makeKeyWindow();
 
+    // SAFETY: makeFirstResponder is not exposed as a safe wrapper in objc2-app-kit.
+    // This sets keyboard focus to the custom view so it receives key events.
     unsafe {
         let () = msg_send![window, makeFirstResponder: custom_view];
     }

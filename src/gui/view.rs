@@ -193,12 +193,13 @@ define_class!(
 );
 
 impl CustomView {
-    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64) -> Retained<Self> {
+    pub fn new(config: Config, elements: ElementList, window_height: f64, menubar_height: f64, mtm: objc2::MainThreadMarker) -> Retained<Self> {
         let state = AppState::new(config, elements, window_height, menubar_height);
-        let mtm = unsafe { objc2::MainThreadMarker::new_unchecked() };
         let this = Self::alloc(mtm).set_ivars(Ivars {
             state: RefCell::new(state),
         });
+        // SAFETY: Calling super's init method is required for proper NSView initialization.
+        // The msg_send![super(...), init] pattern is standard for Objective-C subclass initialization.
         unsafe { msg_send![super(this), init] }
     }
 }

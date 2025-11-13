@@ -15,6 +15,13 @@ pub fn nscolor_from_config(color: &Color) -> Retained<NSColor> {
 }
 
 pub fn draw_text(text: &str, x: f64, y: f64, color: &Color, font_size: f64, font_name: &str) {
+    // SAFETY: NSMutableAttributedString creation and manipulation via msg_send! is required
+    // because objc2-foundation doesn't provide safe wrappers for mutable attributed strings.
+    // The operations are:
+    // 1. Allocate and initialize NSMutableAttributedString with text
+    // 2. Add font and color attributes via NSFontAttributeName/NSForegroundColorAttributeName
+    // 3. Draw at the specified point
+    // All Retained<T> objects are properly managed and the string is valid for the operation.
     unsafe {
         let ns_text = NSString::from_str(text);
         let attr_string: Retained<AnyObject> = msg_send![
@@ -71,6 +78,9 @@ pub fn measure_text_width(text: &str, font_size: f64, font_name: &str) -> f64 {
         return 0.0;
     }
 
+    // SAFETY: NSMutableAttributedString size measurement via msg_send! is required
+    // because objc2-foundation doesn't provide safe wrappers for attributed string sizing.
+    // This creates an attributed string with the font and queries its size.
     unsafe {
         let ns_text = NSString::from_str(text);
         let attr_string: Retained<AnyObject> = msg_send![

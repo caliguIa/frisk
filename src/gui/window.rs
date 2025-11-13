@@ -1,5 +1,5 @@
 use log::debug;
-use objc2::{define_class, MainThreadOnly};
+use objc2::define_class;
 use objc2_app_kit::NSPanel;
 
 define_class!(
