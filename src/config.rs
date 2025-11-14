@@ -25,18 +25,18 @@ struct RawConfig {
 impl Default for RawConfig {
     fn default() -> Self {
         Self {
-            prompt: "Run: ".to_string(),
-            font_family: "Berkeley Mono".to_string(),
+            prompt: "Run: ".into(),
+            font_family: "Berkeley Mono".into(),
             font_size: 32,
             window_opacity: 0.85,
             window_padding: 20,
             prompt_to_items: 60,
             item_spacing: 15,
-            background: "#282c34".to_string(),
-            items: "#ffffff".to_string(),
-            selected_item: "#61afef".to_string(),
-            query: "#e06c75".to_string(),
-            caret: "#e06c75".to_string(),
+            background: "#282c34".into(),
+            items: "#ffffff".into(),
+            selected_item: "#61afef".into(),
+            query: "#e06c75".into(),
+            caret: "#e06c75".into(),
         }
     }
 }
@@ -74,19 +74,31 @@ impl Config {
             let content = fs::read_to_string(&path)?;
             toml::from_str(&content)?
         } else {
-            let raw = RawConfig::default();
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&path, toml::to_string_pretty(&raw)?)?;
-            raw
+            // Use in-memory defaults instead of creating file on every launch
+            // User can create config file manually if they want to customize
+            RawConfig::default()
         };
 
         Self::from_raw(raw)
     }
 
     fn from_raw(raw: RawConfig) -> Result<Self> {
+        let start = std::time::Instant::now();
         let font = Self::create_font(&raw.font_family, raw.font_size);
+        let after_font = std::time::Instant::now();
+        
+        let background_color = Self::parse_color(&raw.background, 40, 44, 52)?;
+        let items_color = Self::parse_color(&raw.items, 255, 255, 255)?;
+        let selected_item_color = Self::parse_color(&raw.selected_item, 97, 175, 239)?;
+        let query_color = Self::parse_color(&raw.query, 224, 108, 117)?;
+        let caret_color = Self::parse_color(&raw.caret, 224, 108, 117)?;
+        let after_colors = std::time::Instant::now();
+        
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("[kickoff]     Font creation:  {:>6.2}ms", (after_font - start).as_secs_f64() * 1000.0);
+            eprintln!("[kickoff]     Color parsing:  {:>6.2}ms", (after_colors - after_font).as_secs_f64() * 1000.0);
+        }
 
         Ok(Self {
             prompt: raw.prompt,
@@ -96,24 +108,26 @@ impl Config {
             prompt_to_items: raw.prompt_to_items,
             item_spacing: raw.item_spacing,
             font,
-            background_color: Self::parse_color(&raw.background, 40, 44, 52)?,
-            items_color: Self::parse_color(&raw.items, 255, 255, 255)?,
-            selected_item_color: Self::parse_color(&raw.selected_item, 97, 175, 239)?,
-            query_color: Self::parse_color(&raw.query, 224, 108, 117)?,
-            caret_color: Self::parse_color(&raw.caret, 224, 108, 117)?,
+            background_color,
+            items_color,
+            selected_item_color,
+            query_color,
+            caret_color,
         })
     }
 
     fn create_font(font_family: &str, font_size: u8) -> Retained<NSFont> {
-        use objc2_foundation::NSString;
-
-        if !font_family.is_empty() && font_family != "system" {
-            let font_name_ns = NSString::from_str(font_family);
-            if let Some(custom_font) = NSFont::fontWithName_size(&font_name_ns, font_size as f64) {
-                return custom_font;
-            }
+        // Note: Custom font lookup is expensive (~15-20ms on first call)
+        // Consider using "system" font for fastest launch times
+        
+        if font_family.is_empty() || font_family == "system" {
+            return NSFont::systemFontOfSize(font_size as f64);
         }
-        NSFont::systemFontOfSize(font_size as f64)
+        
+        use objc2_foundation::NSString;
+        let font_name_ns = NSString::from_str(font_family);
+        NSFont::fontWithName_size(&font_name_ns, font_size as f64)
+            .unwrap_or_else(|| NSFont::systemFontOfSize(font_size as f64))
     }
 
     fn parse_color(
