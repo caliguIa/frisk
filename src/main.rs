@@ -16,16 +16,14 @@ use config::Config;
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let start = std::time::Instant::now();
-
     let config = Config::load(args.config)?;
 
     let elements = apps::discover_applications()?;
 
     crate::log!(
-        "Startup took {:?}, found {} apps",
-        start.elapsed(),
-        elements.len()
+        "Loaded {} apps, estimated memory: ~{} KB",
+        elements.len(),
+        elements.len() * 60 / 1024  // rough estimate
     );
 
     gui::run(config, elements)?;

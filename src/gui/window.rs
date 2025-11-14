@@ -24,7 +24,7 @@ pub fn create_window(
             mtm.alloc::<BorderlessKeyWindow>(),
             initWithContentRect: window_rect,
             styleMask: NSWindowStyleMask::Borderless,
-            backing: NSBackingStoreType::Buffered,
+            backing: NSBackingStoreType::Retained,
             defer: false
         ]
     };
