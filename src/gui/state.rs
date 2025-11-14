@@ -34,7 +34,7 @@ impl AppState {
         let font_size = config.font_size as f64;
         let max_results = Self::calculate_max_results(window_height, font_size, menubar_height);
 
-        let state = Self {
+        let mut state = Self {
             config,
             elements,
             filtered_indices: Vec::new(),
@@ -50,8 +50,7 @@ impl AppState {
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
         };
-
-        // Don't populate filtered_indices on startup - show empty results until user types
+        state.update_search();
         state
     }
 
@@ -75,17 +74,14 @@ impl AppState {
     pub fn update_search(&mut self) {
         let indices = self.elements.search(&self.query);
 
-        // Lazy init calculator on first search
         if self.calculator.is_none() && !self.query.is_empty() {
             self.calculator = Calculator::new().ok();
         }
 
-        // Try to evaluate query as calculator expression
         self.calculator_result = None;
         if let Some(calc) = &mut self.calculator {
             if !self.query.is_empty() {
                 if let Some(result) = calc.evaluate(&self.query) {
-                    // Create element with just result as name, result as value (for clipboard)
                     self.calculator_result = Some(Element {
                         name: result.clone().into_boxed_str(),
                         value: result.into_boxed_str(),
