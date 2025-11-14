@@ -3,7 +3,11 @@ use anyhow::Result;
 use log::{debug, info};
 use path::PathBuf;
 use process::Command;
-use std::{env, fs, path, process, time};
+use std::{
+    env,
+    fs::{self, File},
+    path, process, time,
+};
 use time::{Duration, SystemTime};
 
 const CACHE_TTL: Duration = Duration::from_secs(86400); // 24 hour
@@ -36,10 +40,13 @@ fn is_cache_valid(path: &PathBuf) -> bool {
 
 pub fn discover_applications() -> Result<ElementList> {
     let cache = cache_path();
+    let cache_config = bincode::config::standard();
 
     if is_cache_valid(&cache) {
-        if let Ok(data) = fs::read(&cache) {
-            if let Ok(elements) = bincode::deserialize::<Vec<Element>>(&data) {
+        if let Ok(mut file) = File::open(&cache) {
+            if let Ok(elements) =
+                bincode::decode_from_std_read::<Vec<Element>, _, _>(&mut file, cache_config)
+            {
                 info!("Loaded {} apps from cache", elements.len());
                 let mut list = ElementList::new();
                 for element in elements {
@@ -70,11 +77,11 @@ pub fn discover_applications() -> Result<ElementList> {
             }
         }
 
-        if let Ok(encoded) = bincode::serialize(&apps) {
-            if let Some(parent) = cache.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let _ = fs::write(&cache, encoded);
+        if let Some(parent) = cache.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = File::create(&cache) {
+            let _ = bincode::encode_into_std_write(&apps, &mut file, cache_config);
         }
     }
 

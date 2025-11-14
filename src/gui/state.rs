@@ -30,7 +30,6 @@ impl AppState {
         menubar_height: f64,
     ) -> Self {
         let font_size = config.font_size as f64;
-        let calculator = Calculator::new().ok();
         Self {
             config,
             elements,
@@ -46,7 +45,7 @@ impl AppState {
                 menubar_height,
             ),
             menubar_height,
-            calculator,
+            calculator: None,
         }
     }
 
@@ -67,6 +66,11 @@ impl AppState {
     pub fn update_search(&mut self) {
         let results = self.elements.search(&self.query);
         let mut filtered: Vec<Element> = results.into_iter().cloned().collect();
+
+        // Lazy init calculator on startup
+        if self.calculator.is_none() && !self.query.is_empty() {
+            self.calculator = Calculator::new().ok();
+        }
 
         if let Some(calc) = &mut self.calculator {
             if !self.query.is_empty() {

@@ -1,14 +1,14 @@
+use bincode::{Decode, Encode};
 use nucleo::{Config as NucleoConfig, Nucleo};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Encode, Decode)]
 pub enum ElementType {
     Application,
     CalculatorResult,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Encode, Decode)]
 pub struct Element {
     pub name: String,
     pub value: String,

@@ -1,12 +1,12 @@
 use super::view::CustomView;
 use crate::config::Config;
 use crate::element::ElementList;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::{debug, info};
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSAccessibility, NSBackingStoreType, NSEvent, NSPopUpMenuWindowLevel, NSScreen, NSWindow,
+    NSAccessibility, NSBackingStoreType, NSPopUpMenuWindowLevel, NSScreen, NSWindow,
     NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
@@ -19,7 +19,8 @@ pub fn create_window(
     use std::time::Instant;
     info!("Window: Finding active screen...");
     let start = Instant::now();
-    let active_screen = find_active_screen(mtm);
+    let active_screen =
+        NSScreen::mainScreen(mtm).ok_or_else(|| anyhow!("Failed to find main screen"))?;
     let window_rect = calculate_window_rect(&active_screen);
     info!("Window: Screen detection took {:?}", start.elapsed());
     info!("Window: Creating NSWindow...");
@@ -71,25 +72,6 @@ pub fn create_window(
     info!("Window: Made visible in {:?}", visible_start.elapsed());
 
     Ok(window)
-}
-
-fn find_active_screen(mtm: MainThreadMarker) -> Retained<NSScreen> {
-    let mouse_location = NSEvent::mouseLocation();
-    let screens = NSScreen::screens(mtm);
-
-    for i in 0..screens.count() {
-        let screen = screens.objectAtIndex(i);
-        let frame = screen.frame();
-        if mouse_location.x >= frame.origin.x
-            && mouse_location.x <= frame.origin.x + frame.size.width
-            && mouse_location.y >= frame.origin.y
-            && mouse_location.y <= frame.origin.y + frame.size.height
-        {
-            return screen;
-        }
-    }
-
-    NSScreen::mainScreen(mtm).unwrap()
 }
 
 fn calculate_window_rect(screen: &NSScreen) -> NSRect {

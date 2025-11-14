@@ -33,7 +33,6 @@ define_class!(
         fn draw_rect(&self, _dirty_rect: NSRect) {
             use log::info;
             use std::time::Instant;
-            let mut first_draw: bool = true;
 
             let draw_start = Instant::now();
             let state = self.ivars().state.borrow();
@@ -102,10 +101,7 @@ define_class!(
                 );
             }
 
-                if first_draw {
-                    info!("GUI: First draw_rect completed in {:?}", draw_start.elapsed());
-                    first_draw = false;
-                }
+            info!("GUI: First draw_rect completed in {:?}", draw_start.elapsed());
         }
 
         #[unsafe(method(acceptsFirstResponder))]
