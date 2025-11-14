@@ -35,7 +35,8 @@ define_class!(
             use std::time::Instant;
 
             let draw_start = Instant::now();
-            let state = self.ivars().state.borrow();
+            let mut state = self.ivars().state.borrow_mut();
+            state.update_string_caches();
 
             let bounds = self.bounds();
 
@@ -44,18 +45,16 @@ define_class!(
 
             let padding = state.config.window_padding as f64;
             let prompt_y = bounds.size.height - padding - state.menubar_height;
-            let prompt_text = format!("{}{}", state.config.prompt, state.query);
 
             draw_text(
-                &prompt_text,
+                &state.prompt_query_cache,
                 padding,
                 prompt_y,
                 &state.config.query_color,
                 &state.config.font,
             );
 
-            let text_before_cursor = format!("{}{}", state.config.prompt, &state.query[..state.cursor_position]);
-            let cursor_x = padding + measure_text_width(&text_before_cursor, &state.config.font);
+            let cursor_x = padding + measure_text_width(&state.cursor_text_cache, &state.config.font);
             draw_cursor(
                 cursor_x,
                 prompt_y,
@@ -66,32 +65,34 @@ define_class!(
             let line_height = state.config.font_size as f64 + state.config.item_spacing as f64;
             let results_start_y = prompt_y - state.config.prompt_to_items as f64;
 
-            let visible_elements = state.filtered_elements
+            let visible_indices = state.filtered_indices
                 .iter()
                 .skip(state.scroll_offset)
                 .take(state.dynamic_max_results);
 
-            for (display_i, (actual_i, element)) in visible_elements
+            for (display_i, (actual_i, elem_idx)) in visible_indices
                 .enumerate()
-                .map(|(display_i, element)| (display_i, (state.scroll_offset + display_i, element)))
+                .map(|(display_i, &idx)| (display_i, (state.scroll_offset + display_i, idx)))
             {
-                let y = results_start_y - (display_i as f64 * line_height);
-                let text_color = if actual_i == state.selected_index {
-                    &state.config.selected_item_color
-                } else {
-                    &state.config.items_color
-                };
+                if let Some(element) = state.elements.inner.get(elem_idx) {
+                    let y = results_start_y - (display_i as f64 * line_height);
+                    let text_color = if actual_i == state.selected_index {
+                        &state.config.selected_item_color
+                    } else {
+                        &state.config.items_color
+                    };
 
-                draw_text(
-                    &element.name,
-                    padding,
-                    y,
-                    text_color,
-                    &state.config.font,
-                );
+                    draw_text(
+                        &element.name,
+                        padding,
+                        y,
+                        text_color,
+                        &state.config.font,
+                    );
+                }
             }
 
-            if state.filtered_elements.is_empty() {
+            if state.filtered_indices.is_empty() {
                 draw_text(
                     "No results",
                     padding,

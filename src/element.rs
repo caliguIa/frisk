@@ -10,16 +10,16 @@ pub enum ElementType {
 
 #[derive(Clone, Encode, Decode)]
 pub struct Element {
-    pub name: String,
-    pub value: String,
+    pub name: Arc<str>,
+    pub value: Arc<str>,
     pub element_type: ElementType,
 }
 
 impl Element {
     pub fn new(name: String, value: String) -> Self {
         Self {
-            name,
-            value,
+            name: name.into(),
+            value: value.into(),
             element_type: ElementType::Application,
         }
     }
@@ -38,8 +38,8 @@ impl Element {
             .to_string();
 
         Self {
-            name: display_name,
-            value,
+            name: display_name.into(),
+            value: value.into(),
             element_type: ElementType::CalculatorResult,
         }
     }
@@ -47,7 +47,7 @@ impl Element {
 
 pub struct ElementList {
     pub inner: Vec<Element>,
-    nucleo: Nucleo<Element>,
+    nucleo: Nucleo<usize>,
 }
 
 impl ElementList {
@@ -62,17 +62,17 @@ impl ElementList {
         self.inner.push(element);
     }
 
-    pub fn search(&mut self, query: &str) -> Vec<&Element> {
+    pub fn search(&mut self, query: &str) -> Vec<usize> {
         if query.is_empty() {
-            return self.inner.iter().collect();
+            return (0..self.inner.len()).collect();
         }
 
         self.nucleo.restart(false);
         let injector = self.nucleo.injector();
 
-        for element in &self.inner {
-            injector.push(element.clone(), |el, cols| {
-                cols[0] = el.name.clone().into();
+        for (idx, _element) in self.inner.iter().enumerate() {
+            injector.push(idx, |idx, cols| {
+                cols[0] = self.inner[*idx].name.as_ref().into();
             });
         }
 
@@ -87,13 +87,11 @@ impl ElementList {
         self.nucleo.tick(10);
 
         let snapshot = self.nucleo.snapshot();
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(snapshot.matched_item_count() as usize);
 
         for idx in 0..snapshot.matched_item_count() {
             if let Some(item) = snapshot.get_matched_item(idx) {
-                if let Some(el) = self.inner.iter().find(|el| el.name == item.data.name) {
-                    results.push(el);
-                }
+                results.push(*item.data);
             }
         }
 
