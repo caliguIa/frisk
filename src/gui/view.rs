@@ -62,7 +62,7 @@ define_class!(
             let results_start_y = prompt_y - state.config.prompt_to_items as f64;
 
             let mut display_idx = 0;
-            
+
             // Draw calculator result first if it exists
             if let Some(calc_result) = &state.calculator_result {
                 if display_idx >= state.scroll_offset && display_idx < state.scroll_offset + state.dynamic_max_results {

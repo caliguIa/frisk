@@ -33,7 +33,7 @@ impl AppState {
     ) -> Self {
         let font_size = config.font_size as f64;
         let max_results = Self::calculate_max_results(window_height, font_size, menubar_height);
-        
+
         let state = Self {
             config,
             elements,
@@ -50,7 +50,7 @@ impl AppState {
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
         };
-        
+
         // Don't populate filtered_indices on startup - show empty results until user types
         state
     }
@@ -63,7 +63,10 @@ impl AppState {
 
         crate::log!(
             "Max results: window={}, font={}, available={}, max={}",
-            window_height, font_size, available_height, max_results
+            window_height,
+            font_size,
+            available_height,
+            max_results
         );
 
         max_results.clamp(3, 25)
@@ -118,7 +121,8 @@ impl AppState {
     }
 
     pub fn nav_down(&mut self) {
-        let total_results = (self.calculator_result.is_some() as usize) + self.filtered_indices.len();
+        let total_results =
+            (self.calculator_result.is_some() as usize) + self.filtered_indices.len();
         if self.selected_index < total_results.saturating_sub(1) {
             self.selected_index += 1;
             let visible_end = self.scroll_offset + self.dynamic_max_results;
@@ -136,9 +140,7 @@ impl AppState {
                 let pasteboard = NSPasteboard::generalPasteboard();
                 pasteboard.clearContents();
                 let ns_string = NSString::from_str(&calc_result.value);
-                if unsafe {
-                    pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
-                } {
+                if unsafe { pasteboard.setString_forType(&ns_string, NSPasteboardTypeString) } {
                     self.should_exit = true;
                 } else {
                     return Err(anyhow::anyhow!("Failed to copy"));

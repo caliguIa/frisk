@@ -1,5 +1,5 @@
 use crate::element::{Element, ElementList};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use path::PathBuf;
 use process::Command;
 use std::{
@@ -10,16 +10,6 @@ use std::{
 use time::{Duration, SystemTime};
 
 const CACHE_TTL: Duration = Duration::from_secs(86400); // 24 hour
-
-fn cache_path() -> PathBuf {
-    let config_home_path = env::var("XDG_CONFIG_HOME")
-        .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
-        .unwrap_or_else(|_| "/tmp".to_string());
-
-    PathBuf::from(config_home_path)
-        .join("kickoff")
-        .join("apps.cache")
-}
 
 fn is_cache_valid(path: &PathBuf) -> bool {
     if !path.exists() {
@@ -38,7 +28,14 @@ fn is_cache_valid(path: &PathBuf) -> bool {
 }
 
 pub fn discover_applications() -> Result<ElementList> {
-    let cache = cache_path();
+    let cache = PathBuf::from(
+        env::var("XDG_CACHE_HOME")
+            .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
+            .context("Neither $XDG_CACHE_HOME or $HOME variables are set")?,
+    )
+    .join("kickoff")
+    .join("apps.cache");
+
     let cache_config = bincode::config::standard();
 
     if is_cache_valid(&cache) {
@@ -73,7 +70,6 @@ pub fn discover_applications() -> Result<ElementList> {
             }
         }
 
-        // Cache for next time
         if let Some(parent) = cache.parent() {
             let _ = fs::create_dir_all(parent);
         }

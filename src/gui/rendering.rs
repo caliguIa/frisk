@@ -14,6 +14,12 @@ pub fn draw_text(text: &str, x: f64, y: f64, color: &Retained<NSColor>, font: &R
             static NSFontAttributeName: &'static AnyObject;
         }
 
+        // Create opaque version of the color
+        let opaque_color: Retained<NSColor> = msg_send![
+            color,
+            colorWithAlphaComponent: 1.0
+        ];
+
         let attr_string: Retained<AnyObject> = msg_send![
             msg_send![objc2::class!(NSMutableAttributedString), alloc],
             initWithString: &*ns_text
@@ -29,7 +35,7 @@ pub fn draw_text(text: &str, x: f64, y: f64, color: &Retained<NSColor>, font: &R
         let () = msg_send![
             &*attr_string,
             addAttribute: NSForegroundColorAttributeName,
-            value: &**color,
+            value: &*opaque_color,
             range: full_range
         ];
 

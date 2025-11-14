@@ -24,12 +24,11 @@ pub fn create_window(
             mtm.alloc::<BorderlessKeyWindow>(),
             initWithContentRect: window_rect,
             styleMask: NSWindowStyleMask::Borderless,
-            backing: NSBackingStoreType::Retained,
+            backing: NSBackingStoreType::Buffered,
             defer: false
         ]
     };
 
-    window.setAlphaValue(config.window_opacity as f64);
     window.setBackgroundColor(Some(&config.background_color));
     window.setOpaque(false);
     window.setHasShadow(false);
