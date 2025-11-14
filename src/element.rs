@@ -1,13 +1,14 @@
 use nucleo::{Config as NucleoConfig, Nucleo};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum ElementType {
     Application,
     CalculatorResult,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Element {
     pub name: String,
     pub value: String,
@@ -29,13 +30,13 @@ impl Element {
         } else {
             format!("{} = {}", expression, result)
         };
-        
+
         let value = result
             .trim_start_matches("= ")
             .trim_start_matches("≈ ")
             .trim()
             .to_string();
-        
+
         Self {
             name: display_name,
             value,
@@ -68,7 +69,7 @@ impl ElementList {
 
         self.nucleo.restart(false);
         let injector = self.nucleo.injector();
-        
+
         for element in &self.inner {
             injector.push(element.clone(), |el, cols| {
                 cols[0] = el.name.clone().into();
@@ -87,7 +88,7 @@ impl ElementList {
 
         let snapshot = self.nucleo.snapshot();
         let mut results = Vec::new();
-        
+
         for idx in 0..snapshot.matched_item_count() {
             if let Some(item) = snapshot.get_matched_item(idx) {
                 if let Some(el) = self.inner.iter().find(|el| el.name == item.data.name) {
@@ -95,7 +96,7 @@ impl ElementList {
                 }
             }
         }
-        
+
         results
     }
 

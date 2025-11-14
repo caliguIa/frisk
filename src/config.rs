@@ -1,109 +1,60 @@
 use anyhow::{Context, Result};
+use objc2::rc::Retained;
+use objc2_app_kit::{NSColor, NSFont};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
-pub struct Config {
-    pub prompt: String,
-    pub font_family: String,
-    pub font_size: u8,
-    pub styles: StyleConfig,
-    pub spacing: SpacingConfig,
+struct RawConfig {
+    prompt: String,
+    font_family: String,
+    font_size: u8,
+    window_opacity: f32,
+    window_padding: u8,
+    prompt_to_items: u8,
+    item_spacing: u8,
+    background: String,
+    items: String,
+    selected_item: String,
+    query: String,
+    caret: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(default)]
-pub struct StyleConfig {
-    pub background: String,
-    pub items: String,
-    pub selected_item: String,
-    pub query: String,
-    pub caret: String,
-    pub window_opacity: u8,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(default)]
-pub struct SpacingConfig {
-    pub window_padding: u8,
-    pub prompt_to_items: u8,
-    pub item_spacing: u8,
-}
-
-#[derive(Debug, Clone)]
-pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
-
-impl Color {
-    pub fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Self {
-            r: r as f32 / 255.0,
-            g: g as f32 / 255.0,
-            b: b as f32 / 255.0,
-            a: 1.0,
-        }
-    }
-
-    pub fn from_hex(hex: &str) -> Result<Self> {
-        let hex = hex.trim_start_matches('#');
-        
-        match hex.len() {
-            3 => {
-                let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)?;
-                let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)?;
-                let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)?;
-                Ok(Self::rgb(r, g, b))
-            }
-            6 => {
-                let r = u8::from_str_radix(&hex[0..2], 16)?;
-                let g = u8::from_str_radix(&hex[2..4], 16)?;
-                let b = u8::from_str_radix(&hex[4..6], 16)?;
-                Ok(Self::rgb(r, g, b))
-            }
-            _ => Err(anyhow::anyhow!("Invalid hex color")),
-        }
-    }
-}
-
-impl Default for Config {
+impl Default for RawConfig {
     fn default() -> Self {
         Self {
             prompt: "Run: ".to_string(),
             font_family: "Berkeley Mono".to_string(),
             font_size: 32,
-            styles: StyleConfig::default(),
-            spacing: SpacingConfig::default(),
-        }
-    }
-}
-
-impl Default for StyleConfig {
-    fn default() -> Self {
-        Self {
+            window_opacity: 0.85,
+            window_padding: 20,
+            prompt_to_items: 60,
+            item_spacing: 15,
             background: "#282c34".to_string(),
             items: "#ffffff".to_string(),
             selected_item: "#61afef".to_string(),
             query: "#e06c75".to_string(),
             caret: "#e06c75".to_string(),
-            window_opacity: 85,
         }
     }
 }
 
-impl Default for SpacingConfig {
-    fn default() -> Self {
-        Self {
-            window_padding: 20,
-            prompt_to_items: 60,
-            item_spacing: 15,
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub prompt: String,
+    pub font_size: u8,
+    pub window_opacity: f32,
+    pub window_padding: u8,
+    pub prompt_to_items: u8,
+    pub item_spacing: u8,
+    pub font: Retained<NSFont>,
+    pub background_color: Retained<NSColor>,
+    pub items_color: Retained<NSColor>,
+    pub selected_item_color: Retained<NSColor>,
+    pub query_color: Retained<NSColor>,
+    pub caret_color: Retained<NSColor>,
 }
 
 impl Config {
@@ -114,43 +65,86 @@ impl Config {
                 let home = std::env::var("HOME").context("HOME not set")?;
                 PathBuf::from(home)
                     .join(".config")
-                    .join("kickoff-macos")
+                    .join("kickoff")
                     .join("config.toml")
             }
         };
 
-        if path.exists() {
+        let raw = if path.exists() {
             let content = fs::read_to_string(&path)?;
-            Ok(toml::from_str(&content)?)
+            toml::from_str(&content)?
         } else {
-            let config = Config::default();
+            let raw = RawConfig::default();
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::write(&path, toml::to_string_pretty(&config)?)?;
-            Ok(config)
+            fs::write(&path, toml::to_string_pretty(&raw)?)?;
+            raw
+        };
+
+        Self::from_raw(raw)
+    }
+
+    fn from_raw(raw: RawConfig) -> Result<Self> {
+        let font = Self::create_font(&raw.font_family, raw.font_size);
+
+        Ok(Self {
+            prompt: raw.prompt,
+            font_size: raw.font_size,
+            window_opacity: raw.window_opacity.clamp(0.0, 1.0),
+            window_padding: raw.window_padding,
+            prompt_to_items: raw.prompt_to_items,
+            item_spacing: raw.item_spacing,
+            font,
+            background_color: Self::parse_color(&raw.background, 40, 44, 52)?,
+            items_color: Self::parse_color(&raw.items, 255, 255, 255)?,
+            selected_item_color: Self::parse_color(&raw.selected_item, 97, 175, 239)?,
+            query_color: Self::parse_color(&raw.query, 224, 108, 117)?,
+            caret_color: Self::parse_color(&raw.caret, 224, 108, 117)?,
+        })
+    }
+
+    fn create_font(font_family: &str, font_size: u8) -> Retained<NSFont> {
+        use objc2_foundation::NSString;
+
+        if !font_family.is_empty() && font_family != "system" {
+            let font_name_ns = NSString::from_str(font_family);
+            if let Some(custom_font) = NSFont::fontWithName_size(&font_name_ns, font_size as f64) {
+                return custom_font;
+            }
         }
+        NSFont::systemFontOfSize(font_size as f64)
     }
 
-    pub fn background_color(&self) -> Color {
-        let mut color = Color::from_hex(&self.styles.background).unwrap_or_else(|_| Color::rgb(40, 44, 52));
-        color.a = (self.styles.window_opacity as f32 / 100.0).clamp(0.0, 1.0);
-        color
-    }
+    fn parse_color(
+        hex: &str,
+        fallback_r: u8,
+        fallback_g: u8,
+        fallback_b: u8,
+    ) -> Result<Retained<NSColor>> {
+        let hex = hex.trim_start_matches('#');
 
-    pub fn items_color(&self) -> Color {
-        Color::from_hex(&self.styles.items).unwrap_or_else(|_| Color::rgb(255, 255, 255))
-    }
+        let (r, g, b) = match hex.len() {
+            3 => {
+                let r = u8::from_str_radix(&hex[0..1].repeat(2), 16)?;
+                let g = u8::from_str_radix(&hex[1..2].repeat(2), 16)?;
+                let b = u8::from_str_radix(&hex[2..3].repeat(2), 16)?;
+                (r, g, b)
+            }
+            6 => {
+                let r = u8::from_str_radix(&hex[0..2], 16)?;
+                let g = u8::from_str_radix(&hex[2..4], 16)?;
+                let b = u8::from_str_radix(&hex[4..6], 16)?;
+                (r, g, b)
+            }
+            _ => (fallback_r, fallback_g, fallback_b),
+        };
 
-    pub fn selected_item_color(&self) -> Color {
-        Color::from_hex(&self.styles.selected_item).unwrap_or_else(|_| Color::rgb(97, 175, 239))
-    }
-
-    pub fn query_color(&self) -> Color {
-        Color::from_hex(&self.styles.query).unwrap_or_else(|_| Color::rgb(224, 108, 117))
-    }
-
-    pub fn caret_color(&self) -> Color {
-        Color::from_hex(&self.styles.caret).unwrap_or_else(|_| Color::rgb(224, 108, 117))
+        Ok(NSColor::colorWithSRGBRed_green_blue_alpha(
+            r as f64 / 255.0,
+            g as f64 / 255.0,
+            b as f64 / 255.0,
+            1.0,
+        ))
     }
 }

@@ -1,4 +1,3 @@
-use super::rendering::nscolor_from_config;
 use super::view::CustomView;
 use crate::config::Config;
 use crate::element::ElementList;
@@ -32,8 +31,8 @@ pub fn create_window(
         ]
     };
 
-    window.setAlphaValue((config.styles.window_opacity as f64 / 100.0).clamp(0.0, 1.0));
-    window.setBackgroundColor(Some(&nscolor_from_config(&config.background_color())));
+    window.setAlphaValue(config.window_opacity as f64);
+    window.setBackgroundColor(Some(&config.background_color));
     window.setOpaque(false);
     window.setHasShadow(false);
 

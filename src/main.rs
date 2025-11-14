@@ -17,9 +17,6 @@ use config::Config;
 pub struct Args {
     #[arg(short, long)]
     config: Option<PathBuf>,
-
-    #[arg(short, long)]
-    prompt: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -27,17 +24,17 @@ fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    info!("Starting kickoff");
+    let start = std::time::Instant::now();
 
-    let mut config = Config::load(args.config)?;
-
-    if let Some(prompt) = args.prompt {
-        config.prompt = prompt;
-    }
+    let config = Config::load(args.config)?;
 
     let elements = apps::discover_applications()?;
 
-    info!("Discovered {} applications", elements.len());
+    info!(
+        "Startup took {:?}, found {} apps",
+        start.elapsed(),
+        elements.len()
+    );
 
     gui::run(config, elements)?;
 

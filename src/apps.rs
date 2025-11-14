@@ -1,50 +1,83 @@
 use crate::element::{Element, ElementList};
 use anyhow::Result;
-use log::debug;
-use std::fs;
-use std::path::Path;
+use log::{debug, info};
+use path::PathBuf;
+use process::Command;
+use std::{env, fs, path, process, time};
+use time::{Duration, SystemTime};
 
-pub fn discover_applications() -> Result<ElementList> {
-    let mut elements = ElementList::new();
+const CACHE_TTL: Duration = Duration::from_secs(86400); // 24 hour
 
-    let dirs = [
-        "/Applications",
-        "/System/Applications",
-        "/System/Library/CoreServices/Applications",
-    ];
+fn cache_path() -> PathBuf {
+    let config_home_path = env::var("XDG_CONFIG_HOME")
+        .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
+        .unwrap_or_else(|_| "/tmp".to_string());
 
-    if let Ok(home) = std::env::var("HOME") {
-        scan_directory(Path::new(&format!("{}/Applications", home)), &mut elements);
+    PathBuf::from(config_home_path)
+        .join("kickoff")
+        .join("apps.cache")
+}
+
+fn is_cache_valid(path: &PathBuf) -> bool {
+    if !path.exists() {
+        return false;
     }
 
-    for dir in &dirs {
-        scan_directory(Path::new(dir), &mut elements);
+    if let Ok(metadata) = fs::metadata(path) {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                return elapsed < CACHE_TTL;
+            }
+        }
+    }
+
+    false
+}
+
+pub fn discover_applications() -> Result<ElementList> {
+    let cache = cache_path();
+
+    if is_cache_valid(&cache) {
+        if let Ok(data) = fs::read(&cache) {
+            if let Ok(elements) = bincode::deserialize::<Vec<Element>>(&data) {
+                info!("Loaded {} apps from cache", elements.len());
+                let mut list = ElementList::new();
+                for element in elements {
+                    list.add(element);
+                }
+                return Ok(list);
+            }
+        }
+    }
+
+    let mut elements = ElementList::new();
+    let output = Command::new("mdfind")
+        .arg("kMDItemKind == 'Application'")
+        .output()?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut apps = Vec::new();
+
+        for line in stdout.lines() {
+            let path = line.trim();
+            if path.ends_with(".app") {
+                if let Some(name) = path.rsplit('/').next().and_then(|s| s.strip_suffix(".app")) {
+                    let app = Element::new(name.to_string(), path.to_string());
+                    apps.push(app.clone());
+                    elements.add(app);
+                }
+            }
+        }
+
+        if let Ok(encoded) = bincode::serialize(&apps) {
+            if let Some(parent) = cache.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = fs::write(&cache, encoded);
+        }
     }
 
     debug!("Discovered {} applications", elements.len());
     Ok(elements)
-}
-
-fn scan_directory(dir: &Path, elements: &mut ElementList) {
-    if !dir.exists() {
-        return;
-    }
-
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            if path.extension().and_then(|s| s.to_str()) == Some("app") {
-                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                    let app = Element::new(name.to_string(), path.display().to_string());
-                    elements.add(app);
-                }
-            } else {
-                scan_directory(&path, elements);
-            }
-        }
-    }
 }

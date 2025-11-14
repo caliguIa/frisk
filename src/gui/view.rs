@@ -1,4 +1,4 @@
-use super::rendering::{draw_cursor, draw_text, measure_text_width, nscolor_from_config};
+use super::rendering::{draw_cursor, draw_text, measure_text_width};
 use super::state::AppState;
 use crate::config::Config;
 use crate::element::ElementList;
@@ -35,11 +35,10 @@ define_class!(
 
             let bounds = self.bounds();
 
-            let bg_color = nscolor_from_config(&state.config.background_color());
-            bg_color.setFill();
+            state.config.background_color.setFill();
             NSBezierPath::fillRect(bounds);
 
-            let padding = state.config.spacing.window_padding as f64;
+            let padding = state.config.window_padding as f64;
             let prompt_y = bounds.size.height - padding - state.menubar_height;
             let prompt_text = format!("{}{}", state.config.prompt, state.query);
 
@@ -47,22 +46,21 @@ define_class!(
                 &prompt_text,
                 padding,
                 prompt_y,
-                &state.config.query_color(),
-                state.config.font_size as f64,
-                &state.config.font_family,
+                &state.config.query_color,
+                &state.config.font,
             );
 
             let text_before_cursor = format!("{}{}", state.config.prompt, &state.query[..state.cursor_position]);
-            let cursor_x = padding + measure_text_width(&text_before_cursor, state.config.font_size as f64, &state.config.font_family);
+            let cursor_x = padding + measure_text_width(&text_before_cursor, &state.config.font);
             draw_cursor(
                 cursor_x,
                 prompt_y,
-                &state.config.caret_color(),
+                &state.config.caret_color,
                 state.config.font_size as f64
             );
 
-            let line_height = state.config.font_size as f64 + state.config.spacing.item_spacing as f64;
-            let results_start_y = prompt_y - state.config.spacing.prompt_to_items as f64;
+            let line_height = state.config.font_size as f64 + state.config.item_spacing as f64;
+            let results_start_y = prompt_y - state.config.prompt_to_items as f64;
 
             let visible_elements = state.filtered_elements
                 .iter()
@@ -75,9 +73,9 @@ define_class!(
             {
                 let y = results_start_y - (display_i as f64 * line_height);
                 let text_color = if actual_i == state.selected_index {
-                    &state.config.selected_item_color()
+                    &state.config.selected_item_color
                 } else {
-                    &state.config.items_color()
+                    &state.config.items_color
                 };
 
                 draw_text(
@@ -85,8 +83,7 @@ define_class!(
                     padding,
                     y,
                     text_color,
-                    state.config.font_size as f64,
-                    &state.config.font_family,
+                    &state.config.font,
                 );
             }
 
@@ -95,9 +92,8 @@ define_class!(
                     "No results",
                     padding,
                     results_start_y,
-                    &state.config.items_color(),
-                    state.config.font_size as f64,
-                    &state.config.font_family,
+                    &state.config.items_color,
+                    &state.config.font,
                 );
             }
         }
