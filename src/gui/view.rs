@@ -139,8 +139,62 @@ define_class!(
             let modifiers = event.modifierFlags();
 
             let ctrl = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Control);
+            let cmd = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Command);
 
-            crate::log!("Key: code={}, ctrl={}", key_code, ctrl);
+            crate::log!("Key: code={}, ctrl={}, cmd={}", key_code, ctrl, cmd);
+
+            // Handle Ctrl+letter combinations using charactersIgnoringModifiers
+            if ctrl && !cmd {
+                if let Some(characters) = event.charactersIgnoringModifiers() {
+                    let text = characters.to_string();
+                    crate::log!("Ctrl+key: {:?}", text);
+                    match text.to_lowercase().as_str() {
+                        "w" => {
+                            self.ivars().state.borrow_mut().delete_word();
+                            self.setNeedsDisplay(true);
+                            return;
+                        }
+                        "u" => {
+                            self.ivars().state.borrow_mut().delete_to_start();
+                            self.setNeedsDisplay(true);
+                            return;
+                        }
+                        "n" => {
+                            self.ivars().state.borrow_mut().nav_down();
+                            self.setNeedsDisplay(true);
+                            return;
+                        }
+                        "p" => {
+                            self.ivars().state.borrow_mut().nav_up();
+                            self.setNeedsDisplay(true);
+                            return;
+                        }
+                        "y" => {
+                            let mut state = self.ivars().state.borrow_mut();
+                            if let Err(e) = state.execute_selected() {
+                                eprintln!("[kickoff] Failed to execute: {}", e);
+                            }
+                            if state.should_exit {
+                                drop(state);
+                                self.ivars().state.borrow().terminate();
+                            }
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Handle Cmd+V for paste
+            if cmd && !ctrl {
+                if let Some(characters) = event.charactersIgnoringModifiers() {
+                    if characters.to_string().to_lowercase() == "v" {
+                        self.ivars().state.borrow_mut().paste();
+                        self.setNeedsDisplay(true);
+                        return;
+                    }
+                }
+            }
 
             match key_code {
                 KEY_ESCAPE => {
@@ -159,13 +213,17 @@ define_class!(
                     return;
                 }
                 KEY_UP => {
-                    self.ivars().state.borrow_mut().nav_up();
-                    self.setNeedsDisplay(true);
+                    if !ctrl {
+                        self.ivars().state.borrow_mut().nav_up();
+                        self.setNeedsDisplay(true);
+                    }
                     return;
                 }
                 KEY_DOWN => {
-                    self.ivars().state.borrow_mut().nav_down();
-                    self.setNeedsDisplay(true);
+                    if !ctrl {
+                        self.ivars().state.borrow_mut().nav_down();
+                        self.setNeedsDisplay(true);
+                    }
                     return;
                 }
                 KEY_TAB => {

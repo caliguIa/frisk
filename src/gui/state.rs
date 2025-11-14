@@ -82,10 +82,12 @@ impl AppState {
         if let Some(calc) = &mut self.calculator {
             if !self.query.is_empty() {
                 if let Some(result) = calc.evaluate(&self.query) {
-                    self.calculator_result = Some(Element::new_calculator_result(
-                        self.query.clone(),
-                        result,
-                    ));
+                    // Create element with just result as name, result as value (for clipboard)
+                    self.calculator_result = Some(Element {
+                        name: result.clone().into_boxed_str(),
+                        value: result.into_boxed_str(),
+                        element_type: crate::element::ElementType::CalculatorResult,
+                    });
                 }
             }
         }
@@ -221,6 +223,34 @@ impl AppState {
             self.cursor_position = word_start;
         }
         self.update_search();
+    }
+
+    pub fn delete_to_start(&mut self) {
+        if self.cursor_position > 0 {
+            self.query.drain(..self.cursor_position);
+            self.cursor_position = 0;
+            self.update_search();
+        }
+    }
+
+    pub fn paste(&mut self) {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        if let Some(text) = unsafe { pasteboard.stringForType(NSPasteboardTypeString) } {
+            let paste_str = text.to_string();
+            for c in paste_str.chars() {
+                if !c.is_control() || c == '\n' || c == '\t' {
+                    // Convert newlines and tabs to spaces
+                    if c == '\n' || c == '\t' {
+                        self.query.insert(self.cursor_position, ' ');
+                        self.cursor_position += 1;
+                    } else {
+                        self.query.insert(self.cursor_position, c);
+                        self.cursor_position += c.len_utf8();
+                    }
+                }
+            }
+            self.update_search();
+        }
     }
 
     pub fn insert_char(&mut self, c: char) {
