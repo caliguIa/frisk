@@ -25,11 +25,16 @@ impl Element {
     }
 
     pub fn new_calculator_result(expression: String, result: String) -> Self {
-        let display_name = if result.starts_with("= ") || result.starts_with("≈ ") {
-            format!("{} {}", expression, result)
+        let mut display_name = String::with_capacity(expression.len() + result.len() + 3);
+        display_name.push_str(&expression);
+
+        if result.starts_with("= ") || result.starts_with("≈ ") {
+            display_name.push(' ');
+            display_name.push_str(&result);
         } else {
-            format!("{} = {}", expression, result)
-        };
+            display_name.push_str(" = ");
+            display_name.push_str(&result);
+        }
 
         let value = result
             .trim_start_matches("= ")

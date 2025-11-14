@@ -54,7 +54,14 @@ define_class!(
                 &state.config.font,
             );
 
-            let cursor_x = padding + measure_text_width(&state.cursor_text_cache, &state.config.font);
+            let cursor_text = state.cursor_text_cache.clone();
+            let cursor_x = if let Some(width) = state.get_cached_text_width(&cursor_text) {
+                padding + width
+            } else {
+                let width = measure_text_width(&cursor_text, &state.config.font);
+                state.cache_text_width(cursor_text, width);
+                padding + width
+            };
             draw_cursor(
                 cursor_x,
                 prompt_y,

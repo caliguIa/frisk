@@ -6,6 +6,7 @@ use log::info;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
+use std::collections::HashMap;
 use std::process::Command;
 
 pub struct AppState {
@@ -22,6 +23,7 @@ pub struct AppState {
     calculator: Option<Calculator>,
     pub prompt_query_cache: String,
     pub cursor_text_cache: String,
+    pub text_width_cache: HashMap<String, f64>,
 }
 
 impl AppState {
@@ -50,6 +52,7 @@ impl AppState {
             calculator: None,
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
+            text_width_cache: HashMap::with_capacity(32),
         }
     }
 
@@ -113,6 +116,17 @@ impl AppState {
         self.cursor_text_cache.push_str(&self.config.prompt);
         self.cursor_text_cache
             .push_str(&self.query[..self.cursor_position]);
+    }
+
+    pub fn get_cached_text_width(&mut self, text: &str) -> Option<f64> {
+        self.text_width_cache.get(text).copied()
+    }
+
+    pub fn cache_text_width(&mut self, text: String, width: f64) {
+        if self.text_width_cache.len() > 100 {
+            self.text_width_cache.clear();
+        }
+        self.text_width_cache.insert(text, width);
     }
 
     pub fn nav_up(&mut self) {
