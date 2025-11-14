@@ -21,6 +21,7 @@ pub struct AppState {
     pub dynamic_max_results: usize,
     pub menubar_height: f64,
     calculator: Option<Calculator>,
+    pub calculator_result: Option<Element>,
     pub prompt_query_cache: String,
     pub cursor_text_cache: String,
     pub text_width_cache: HashMap<String, f64>,
@@ -50,6 +51,7 @@ impl AppState {
             ),
             menubar_height,
             calculator: None,
+            calculator_result: None,
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
             text_width_cache: HashMap::with_capacity(32),
@@ -71,26 +73,22 @@ impl AppState {
     }
 
     pub fn update_search(&mut self) {
-        let mut indices = self.elements.search(&self.query);
+        let indices = self.elements.search(&self.query);
 
-        // Lazy init calculator on startup
+        // Lazy init calculator on first search
         if self.calculator.is_none() && !self.query.is_empty() {
             self.calculator = Calculator::new().ok();
         }
 
-        // Calculator results are stored temporarily at the end of elements
-        let mut calc_index = None;
+        // Try to evaluate query as calculator expression
+        self.calculator_result = None;
         if let Some(calc) = &mut self.calculator {
             if !self.query.is_empty() {
                 if let Some(result) = calc.evaluate(&self.query) {
-                    let calc_element = Element::new_calculator_result(self.query.clone(), result);
-
-                    // Add calculator result to elements temporarily
-                    self.elements.add(calc_element);
-                    calc_index = Some(self.elements.len() - 1);
-
-                    // Insert calculator index at the front
-                    indices.insert(0, calc_index.unwrap());
+                    self.calculator_result = Some(Element::new_calculator_result(
+                        self.query.clone(),
+                        result,
+                    ));
                 }
             }
         }
@@ -98,13 +96,6 @@ impl AppState {
         self.filtered_indices = indices;
         self.selected_index = 0;
         self.scroll_offset = 0;
-
-        // Remove calculator element if it was added (keep elements clean for next search)
-        if let Some(idx) = calc_index {
-            if idx == self.elements.len() - 1 {
-                self.elements.inner.pop();
-            }
-        }
     }
 
     pub fn update_string_caches(&mut self) {
@@ -139,7 +130,8 @@ impl AppState {
     }
 
     pub fn nav_down(&mut self) {
-        if self.selected_index < self.filtered_indices.len().saturating_sub(1) {
+        let total_results = (self.calculator_result.is_some() as usize) + self.filtered_indices.len();
+        if self.selected_index < total_results.saturating_sub(1) {
             self.selected_index += 1;
             let visible_end = self.scroll_offset + self.dynamic_max_results;
             if self.selected_index >= visible_end {
@@ -149,29 +141,54 @@ impl AppState {
     }
 
     pub fn execute_selected(&mut self) -> Result<()> {
-        if let Some(&idx) = self.filtered_indices.get(self.selected_index) {
-            if let Some(element) = self.elements.inner.get(idx) {
-                match element.element_type {
-                    ElementType::Application => {
-                        info!("Launching: {}", element.name);
-                        Command::new("open")
-                            .arg("-a")
-                            .arg(element.value.as_ref())
-                            .spawn()
-                            .map_err(|e| anyhow::anyhow!("Failed to launch: {}", e))?;
-                        self.should_exit = true;
-                    }
-                    ElementType::CalculatorResult => {
-                        info!("Copying: {}", element.value);
-                        let pasteboard = NSPasteboard::generalPasteboard();
-                        pasteboard.clearContents();
-                        let ns_string = NSString::from_str(element.value.as_ref());
-                        if unsafe {
-                            pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
-                        } {
+        // Check if calculator result is selected (index 0 when it exists)
+        if self.selected_index == 0 && self.calculator_result.is_some() {
+            if let Some(calc_result) = &self.calculator_result {
+                info!("Copying calculator result: {}", calc_result.value);
+                let pasteboard = NSPasteboard::generalPasteboard();
+                pasteboard.clearContents();
+                let ns_string = NSString::from_str(&calc_result.value);
+                if unsafe {
+                    pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
+                } {
+                    self.should_exit = true;
+                } else {
+                    return Err(anyhow::anyhow!("Failed to copy"));
+                }
+            }
+        } else {
+            // Adjust index if calculator result exists
+            let app_idx = if self.calculator_result.is_some() {
+                self.selected_index - 1
+            } else {
+                self.selected_index
+            };
+
+            if let Some(&idx) = self.filtered_indices.get(app_idx) {
+                if let Some(element) = self.elements.inner.get(idx) {
+                    match element.element_type {
+                        ElementType::Application => {
+                            info!("Launching: {}", element.name);
+                            Command::new("open")
+                                .arg("-a")
+                                .arg(element.value.as_ref())
+                                .spawn()
+                                .map_err(|e| anyhow::anyhow!("Failed to launch: {}", e))?;
                             self.should_exit = true;
-                        } else {
-                            return Err(anyhow::anyhow!("Failed to copy"));
+                        }
+                        ElementType::CalculatorResult => {
+                            // This shouldn't happen anymore but keep for safety
+                            info!("Copying: {}", element.value);
+                            let pasteboard = NSPasteboard::generalPasteboard();
+                            pasteboard.clearContents();
+                            let ns_string = NSString::from_str(element.value.as_ref());
+                            if unsafe {
+                                pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
+                            } {
+                                self.should_exit = true;
+                            } else {
+                                return Err(anyhow::anyhow!("Failed to copy"));
+                            }
                         }
                     }
                 }

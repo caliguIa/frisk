@@ -72,34 +72,57 @@ define_class!(
             let line_height = state.config.font_size as f64 + state.config.item_spacing as f64;
             let results_start_y = prompt_y - state.config.prompt_to_items as f64;
 
-            let visible_indices = state.filtered_indices
-                .iter()
-                .skip(state.scroll_offset)
-                .take(state.dynamic_max_results);
-
-            for (display_i, (actual_i, elem_idx)) in visible_indices
-                .enumerate()
-                .map(|(display_i, &idx)| (display_i, (state.scroll_offset + display_i, idx)))
-            {
-                if let Some(element) = state.elements.inner.get(elem_idx) {
-                    let y = results_start_y - (display_i as f64 * line_height);
-                    let text_color = if actual_i == state.selected_index {
+            let mut display_idx = 0;
+            
+            // Draw calculator result first if it exists
+            if let Some(calc_result) = &state.calculator_result {
+                if display_idx >= state.scroll_offset && display_idx < state.scroll_offset + state.dynamic_max_results {
+                    let y = results_start_y - ((display_idx - state.scroll_offset) as f64 * line_height);
+                    let text_color = if display_idx == state.selected_index {
                         &state.config.selected_item_color
                     } else {
                         &state.config.items_color
                     };
 
                     draw_text(
-                        &element.name,
+                        &calc_result.name,
                         padding,
                         y,
                         text_color,
                         &state.config.font,
                     );
                 }
+                display_idx += 1;
             }
 
-            if state.filtered_indices.is_empty() {
+            // Draw app results
+            for &elem_idx in &state.filtered_indices {
+                if display_idx >= state.scroll_offset && display_idx < state.scroll_offset + state.dynamic_max_results {
+                    if let Some(element) = state.elements.inner.get(elem_idx) {
+                        let y = results_start_y - ((display_idx - state.scroll_offset) as f64 * line_height);
+                        let text_color = if display_idx == state.selected_index {
+                            &state.config.selected_item_color
+                        } else {
+                            &state.config.items_color
+                        };
+
+                        draw_text(
+                            &element.name,
+                            padding,
+                            y,
+                            text_color,
+                            &state.config.font,
+                        );
+                    }
+                }
+                display_idx += 1;
+                if display_idx >= state.scroll_offset + state.dynamic_max_results {
+                    break;
+                }
+            }
+
+            let has_results = state.calculator_result.is_some() || !state.filtered_indices.is_empty();
+            if !has_results {
                 draw_text(
                     "No results",
                     padding,
