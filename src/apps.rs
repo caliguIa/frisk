@@ -1,6 +1,5 @@
 use crate::element::{Element, ElementList};
 use anyhow::Result;
-use log::{debug, info};
 use path::PathBuf;
 use process::Command;
 use std::{
@@ -47,7 +46,7 @@ pub fn discover_applications() -> Result<ElementList> {
             if let Ok(elements) =
                 bincode::decode_from_std_read::<Vec<Element>, _, _>(&mut file, cache_config)
             {
-                info!("Loaded {} apps from cache", elements.len());
+                crate::log!("Loaded {} apps from cache", elements.len());
                 let mut list = ElementList::new();
                 for element in elements {
                     list.add(element);
@@ -64,27 +63,25 @@ pub fn discover_applications() -> Result<ElementList> {
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut apps = Vec::new();
 
         for line in stdout.lines() {
             let path = line.trim();
             if path.ends_with(".app") {
                 if let Some(name) = path.rsplit('/').next().and_then(|s| s.strip_suffix(".app")) {
-                    let app = Element::new(name.to_string(), path.to_string());
-                    apps.push(app.clone());
-                    elements.add(app);
+                    elements.add(Element::new(name.to_string(), path.to_string()));
                 }
             }
         }
 
+        // Cache for next time
         if let Some(parent) = cache.parent() {
             let _ = fs::create_dir_all(parent);
         }
         if let Ok(mut file) = File::create(&cache) {
-            let _ = bincode::encode_into_std_write(&apps, &mut file, cache_config);
+            let _ = bincode::encode_into_std_write(&elements.inner, &mut file, cache_config);
         }
     }
 
-    debug!("Discovered {} applications", elements.len());
+    crate::log!("Discovered {} applications", elements.len());
     Ok(elements)
 }

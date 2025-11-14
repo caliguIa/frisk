@@ -13,14 +13,11 @@ name = "kickoff"
 path = "src/main.rs"
 
 [dependencies]
-nucleo = "0.5"
-clap = { version = "4.5.51", features = ["derive"] }
+nucleo-matcher = "0.3"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "0.9.8"
 bincode = "2.0.1"
 anyhow = "1.0.100"
-log = "0.4.28"
-env_logger = "0.11.8"
 objc2 = "0.6.3"
 objc2-foundation = { version = "0.3.2", features = ["NSString", "NSGeometry"] }
 objc2-app-kit = { version = "0.3.2", features = [
@@ -35,8 +32,12 @@ objc2-app-kit = { version = "0.3.2", features = [
   "NSPasteboard",
 ] }
 objc2-quartz-core = { version = "0.3.2", features = ["CALayer"] }
-meval = "0.2"
+evalexpr = "13.0"
 
-# [profile.release]
-# lto = true
-# debug = true
+[profile.release]
+lto = true
+opt-level = "z"     # Optimize for size
+strip = true        # Strip symbols
+codegen-units = 1   # Better optimization
+panic = "abort"     # Smaller binary
+

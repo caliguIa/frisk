@@ -1,6 +1,5 @@
 use bincode::{Decode, Encode};
-use nucleo::{Config as NucleoConfig, Nucleo};
-use std::sync::Arc;
+use nucleo_matcher::{Matcher, Config as MatcherConfig, pattern::{Pattern, CaseMatching, Normalization}, Utf32Str};
 
 #[derive(Clone, Encode, Decode)]
 pub enum ElementType {
@@ -10,16 +9,16 @@ pub enum ElementType {
 
 #[derive(Clone, Encode, Decode)]
 pub struct Element {
-    pub name: Arc<str>,
-    pub value: Arc<str>,
+    pub name: Box<str>,
+    pub value: Box<str>,
     pub element_type: ElementType,
 }
 
 impl Element {
     pub fn new(name: String, value: String) -> Self {
         Self {
-            name: name.into(),
-            value: value.into(),
+            name: name.into_boxed_str(),
+            value: value.into_boxed_str(),
             element_type: ElementType::Application,
         }
     }
@@ -43,8 +42,8 @@ impl Element {
             .to_string();
 
         Self {
-            name: display_name.into(),
-            value: value.into(),
+            name: display_name.into_boxed_str(),
+            value: value.into_boxed_str(),
             element_type: ElementType::CalculatorResult,
         }
     }
@@ -52,14 +51,16 @@ impl Element {
 
 pub struct ElementList {
     pub inner: Vec<Element>,
-    nucleo: Nucleo<usize>,
+    matcher: Matcher,
+    char_buf: Vec<char>,
 }
 
 impl ElementList {
     pub fn new() -> Self {
         Self {
             inner: Vec::new(),
-            nucleo: Nucleo::new(NucleoConfig::DEFAULT, Arc::new(|| {}), None, 1),
+            matcher: Matcher::new(MatcherConfig::DEFAULT),
+            char_buf: Vec::with_capacity(256),
         }
     }
 
@@ -69,38 +70,27 @@ impl ElementList {
 
     pub fn search(&mut self, query: &str) -> Vec<usize> {
         if query.is_empty() {
-            return (0..self.inner.len()).collect();
+            return Vec::new();  // Don't show all apps when query is empty
         }
 
-        self.nucleo.restart(false);
-        let injector = self.nucleo.injector();
+        // Parse the pattern from the query string
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
 
-        for (idx, _element) in self.inner.iter().enumerate() {
-            injector.push(idx, |idx, cols| {
-                cols[0] = self.inner[*idx].name.as_ref().into();
-            });
-        }
-
-        self.nucleo.pattern.reparse(
-            0,
-            query,
-            nucleo::pattern::CaseMatching::Ignore,
-            nucleo::pattern::Normalization::Smart,
-            false,
-        );
-
-        self.nucleo.tick(10);
-
-        let snapshot = self.nucleo.snapshot();
-        let mut results = Vec::with_capacity(snapshot.matched_item_count() as usize);
-
-        for idx in 0..snapshot.matched_item_count() {
-            if let Some(item) = snapshot.get_matched_item(idx) {
-                results.push(*item.data);
+        let mut matches: Vec<(usize, u32)> = Vec::with_capacity(20);  // Pre-allocate for typical result count
+        
+        for (idx, element) in self.inner.iter().enumerate() {
+            // Create UTF-32 representation of haystack
+            let haystack = Utf32Str::new(&element.name, &mut self.char_buf);
+            
+            if let Some(score) = pattern.score(haystack, &mut self.matcher) {
+                matches.push((idx, score));
             }
         }
 
-        results
+        // Sort by score descending
+        matches.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+
+        matches.into_iter().map(|(idx, _)| idx).collect()
     }
 
     pub fn len(&self) -> usize {

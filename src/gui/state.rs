@@ -2,11 +2,9 @@ use crate::calculator::Calculator;
 use crate::config::Config;
 use crate::element::{Element, ElementList, ElementType};
 use anyhow::Result;
-use log::info;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
-use std::collections::HashMap;
 use std::process::Command;
 
 pub struct AppState {
@@ -24,7 +22,6 @@ pub struct AppState {
     pub calculator_result: Option<Element>,
     pub prompt_query_cache: String,
     pub cursor_text_cache: String,
-    pub text_width_cache: HashMap<String, f64>,
 }
 
 impl AppState {
@@ -35,27 +32,27 @@ impl AppState {
         menubar_height: f64,
     ) -> Self {
         let font_size = config.font_size as f64;
-        Self {
+        let max_results = Self::calculate_max_results(window_height, font_size, menubar_height);
+        
+        let state = Self {
             config,
             elements,
-            filtered_indices: Vec::with_capacity(20),
+            filtered_indices: Vec::new(),
             selected_index: 0,
             scroll_offset: 0,
             query: String::with_capacity(32),
             cursor_position: 0,
             should_exit: false,
-            dynamic_max_results: Self::calculate_max_results(
-                window_height,
-                font_size,
-                menubar_height,
-            ),
+            dynamic_max_results: max_results,
             menubar_height,
             calculator: None,
             calculator_result: None,
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
-            text_width_cache: HashMap::with_capacity(32),
-        }
+        };
+        
+        // Don't populate filtered_indices on startup - show empty results until user types
+        state
     }
 
     fn calculate_max_results(window_height: f64, font_size: f64, menubar_height: f64) -> usize {
@@ -64,7 +61,7 @@ impl AppState {
         let available_height = window_height - overhead - menubar_height;
         let max_results = (available_height / line_height).floor() as usize;
 
-        info!(
+        crate::log!(
             "Max results: window={}, font={}, available={}, max={}",
             window_height, font_size, available_height, max_results
         );
@@ -109,17 +106,6 @@ impl AppState {
             .push_str(&self.query[..self.cursor_position]);
     }
 
-    pub fn get_cached_text_width(&mut self, text: &str) -> Option<f64> {
-        self.text_width_cache.get(text).copied()
-    }
-
-    pub fn cache_text_width(&mut self, text: String, width: f64) {
-        if self.text_width_cache.len() > 100 {
-            self.text_width_cache.clear();
-        }
-        self.text_width_cache.insert(text, width);
-    }
-
     pub fn nav_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
@@ -144,7 +130,7 @@ impl AppState {
         // Check if calculator result is selected (index 0 when it exists)
         if self.selected_index == 0 && self.calculator_result.is_some() {
             if let Some(calc_result) = &self.calculator_result {
-                info!("Copying calculator result: {}", calc_result.value);
+                crate::log!("Copying calculator result: {}", calc_result.value);
                 let pasteboard = NSPasteboard::generalPasteboard();
                 pasteboard.clearContents();
                 let ns_string = NSString::from_str(&calc_result.value);
@@ -168,7 +154,7 @@ impl AppState {
                 if let Some(element) = self.elements.inner.get(idx) {
                     match element.element_type {
                         ElementType::Application => {
-                            info!("Launching: {}", element.name);
+                            crate::log!("Launching: {}", element.name);
                             Command::new("open")
                                 .arg("-a")
                                 .arg(element.value.as_ref())
@@ -178,10 +164,10 @@ impl AppState {
                         }
                         ElementType::CalculatorResult => {
                             // This shouldn't happen anymore but keep for safety
-                            info!("Copying: {}", element.value);
+                            crate::log!("Copying: {}", element.value);
                             let pasteboard = NSPasteboard::generalPasteboard();
                             pasteboard.clearContents();
-                            let ns_string = NSString::from_str(element.value.as_ref());
+                            let ns_string = NSString::from_str(&element.value);
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {

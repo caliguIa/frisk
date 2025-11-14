@@ -1,27 +1,19 @@
 use anyhow::Result;
-use clap::Parser;
-use log::info;
-use std::path::PathBuf;
 
+mod args;
 mod apps;
 mod calculator;
 mod config;
 mod element;
 mod gui;
 
+#[macro_use]
+mod log;
+
+use args::Args;
 use config::Config;
 
-#[derive(Parser)]
-#[command(name = "kickoff")]
-#[command(about = "A fast and minimal program launcher for macOS")]
-pub struct Args {
-    #[arg(short, long)]
-    config: Option<PathBuf>,
-}
-
 fn main() -> Result<()> {
-    env_logger::init();
-
     let args = Args::parse();
 
     let start = std::time::Instant::now();
@@ -30,7 +22,7 @@ fn main() -> Result<()> {
 
     let elements = apps::discover_applications()?;
 
-    info!(
+    crate::log!(
         "Startup took {:?}, found {} apps",
         start.elapsed(),
         elements.len()

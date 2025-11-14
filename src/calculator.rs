@@ -1,5 +1,4 @@
 use anyhow::Result;
-use log::debug;
 
 pub struct Calculator;
 
@@ -14,20 +13,27 @@ impl Calculator {
             return None;
         }
 
-        match meval::eval_str(expr) {
+        match evalexpr::eval(expr) {
             Ok(result) => {
-                let formatted = if result.fract() == 0.0 && result.abs() < 1e15 {
-                    format!("{}", result as i64)
-                } else {
-                    let s = format!("{}", result);
-                    if s.len() > 10 {
-                        format!("{:.6}", result)
-                    } else {
-                        s
+                let formatted = match result {
+                    evalexpr::Value::Int(i) => i.to_string(),
+                    evalexpr::Value::Float(f) => {
+                        if f.fract() == 0.0 && f.abs() < 1e15 {
+                            format!("{}", f as i64)
+                        } else {
+                            let s = format!("{}", f);
+                            if s.len() > 10 {
+                                format!("{:.6}", f)
+                            } else {
+                                s
+                            }
+                        }
                     }
+                    evalexpr::Value::Boolean(b) => b.to_string(),
+                    _ => return None,
                 };
 
-                debug!("Calculator: {:?} -> {:?}", expr, formatted);
+                crate::log!("Calculator: {:?} -> {:?}", expr, formatted);
 
                 if formatted == expr {
                     return None;

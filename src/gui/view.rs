@@ -2,7 +2,6 @@ use super::rendering::{draw_cursor, draw_text, measure_text_width};
 use super::state::AppState;
 use crate::config::Config;
 use crate::element::ElementList;
-use log::{debug, info};
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
 use objc2_app_kit::{NSBezierPath, NSEvent, NSView};
@@ -31,10 +30,6 @@ define_class!(
     impl CustomView {
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty_rect: NSRect) {
-            use log::info;
-            use std::time::Instant;
-
-            let draw_start = Instant::now();
             let mut state = self.ivars().state.borrow_mut();
             state.update_string_caches();
 
@@ -55,13 +50,7 @@ define_class!(
             );
 
             let cursor_text = state.cursor_text_cache.clone();
-            let cursor_x = if let Some(width) = state.get_cached_text_width(&cursor_text) {
-                padding + width
-            } else {
-                let width = measure_text_width(&cursor_text, &state.config.font);
-                state.cache_text_width(cursor_text, width);
-                padding + width
-            };
+            let cursor_x = padding + measure_text_width(&cursor_text, &state.config.font);
             draw_cursor(
                 cursor_x,
                 prompt_y,
@@ -122,7 +111,7 @@ define_class!(
             }
 
             let has_results = state.calculator_result.is_some() || !state.filtered_indices.is_empty();
-            if !has_results {
+            if !has_results && !state.query.is_empty() {
                 draw_text(
                     "No results",
                     padding,
@@ -131,8 +120,6 @@ define_class!(
                     &state.config.font,
                 );
             }
-
-            info!("GUI: First draw_rect completed in {:?}", draw_start.elapsed());
         }
 
         #[unsafe(method(acceptsFirstResponder))]
@@ -142,7 +129,7 @@ define_class!(
 
         #[unsafe(method(becomeFirstResponder))]
         fn become_first_responder(&self) -> bool {
-            debug!("View became first responder");
+            crate::log!("View became first responder");
             true
         }
 
@@ -153,7 +140,7 @@ define_class!(
 
             let ctrl = modifiers.contains(objc2_app_kit::NSEventModifierFlags::Control);
 
-            info!("Key: code={}, ctrl={}", key_code, ctrl);
+            crate::log!("Key: code={}, ctrl={}", key_code, ctrl);
 
             match key_code {
                 KEY_ESCAPE => {
@@ -163,7 +150,7 @@ define_class!(
                 KEY_ENTER => {
                     let mut state = self.ivars().state.borrow_mut();
                     if let Err(e) = state.execute_selected() {
-                        log::error!("Failed to execute: {}", e);
+                        eprintln!("[kickoff] Failed to execute: {}", e);
                     }
                     if state.should_exit {
                         drop(state);
