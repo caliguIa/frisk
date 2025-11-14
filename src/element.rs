@@ -46,7 +46,7 @@ impl Element {
 }
 
 pub struct ElementList {
-    inner: Vec<Element>,
+    pub inner: Vec<Element>,
     nucleo: Nucleo<Element>,
 }
 

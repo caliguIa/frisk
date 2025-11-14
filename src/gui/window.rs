@@ -16,11 +16,14 @@ pub fn create_window(
     config: Config,
     elements: ElementList,
 ) -> Result<Retained<BorderlessKeyWindow>> {
+    use std::time::Instant;
+    info!("Window: Finding active screen...");
+    let start = Instant::now();
     let active_screen = find_active_screen(mtm);
     let window_rect = calculate_window_rect(&active_screen);
-    let menubar_height =
-        active_screen.frame().size.height - active_screen.visibleFrame().size.height;
-
+    info!("Window: Screen detection took {:?}", start.elapsed());
+    info!("Window: Creating NSWindow...");
+    let window_start = Instant::now();
     let window: Retained<BorderlessKeyWindow> = unsafe {
         msg_send![
             mtm.alloc::<BorderlessKeyWindow>(),
@@ -30,22 +33,34 @@ pub fn create_window(
             defer: false
         ]
     };
+    info!("Window: NSWindow created in {:?}", window_start.elapsed());
 
+    info!("Window: Setting window properties...");
+    let props_start = Instant::now();
     window.setAlphaValue(config.window_opacity as f64);
     window.setBackgroundColor(Some(&config.background_color));
     window.setOpaque(false);
     window.setHasShadow(false);
+    info!("Window: Properties set in {:?}", props_start.elapsed());
 
+    info!("Window: Creating custom view...");
+    let view_start = Instant::now();
     let custom_view = CustomView::new(
         config,
         elements,
         window_rect.size.height,
-        menubar_height,
+        active_screen.frame().size.height - active_screen.visibleFrame().size.height,
         mtm,
     );
+    info!("Window: Custom view created in {:?}", view_start.elapsed());
 
+    info!("Window: Setting content view...");
+    let content_start = Instant::now();
     window.setContentView(Some(&custom_view));
+    info!("Window: Content view set in {:?}", content_start.elapsed());
 
+    info!("Window: Making window visible...");
+    let visible_start = Instant::now();
     window.setLevel(NSPopUpMenuWindowLevel);
     window.makeKeyAndOrderFront(None);
     window.makeKeyWindow();
@@ -53,15 +68,7 @@ pub fn create_window(
     window.orderFrontRegardless();
     window.setAccessibilityFrontmost(true);
     window.setAccessibilityFocused(true);
-
-    info!(
-        "Window: ({}, {}), {}x{}, menubar={}",
-        window_rect.origin.x,
-        window_rect.origin.y,
-        window_rect.size.width,
-        window_rect.size.height,
-        menubar_height,
-    );
+    info!("Window: Made visible in {:?}", visible_start.elapsed());
 
     Ok(window)
 }
@@ -86,12 +93,11 @@ fn find_active_screen(mtm: MainThreadMarker) -> Retained<NSScreen> {
 }
 
 fn calculate_window_rect(screen: &NSScreen) -> NSRect {
-    let visible_rect = screen.visibleFrame();
     let full_rect = screen.frame();
 
     NSRect::new(
         NSPoint::new(full_rect.origin.x, full_rect.origin.y),
-        NSSize::new(full_rect.size.width, visible_rect.size.height),
+        NSSize::new(full_rect.size.width, screen.visibleFrame().size.height),
     )
 }
 

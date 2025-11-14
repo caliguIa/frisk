@@ -31,6 +31,11 @@ define_class!(
     impl CustomView {
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty_rect: NSRect) {
+            use log::info;
+            use std::time::Instant;
+            let mut first_draw: bool = true;
+
+            let draw_start = Instant::now();
             let state = self.ivars().state.borrow();
 
             let bounds = self.bounds();
@@ -96,6 +101,11 @@ define_class!(
                     &state.config.font,
                 );
             }
+
+                if first_draw {
+                    info!("GUI: First draw_rect completed in {:?}", draw_start.elapsed());
+                    first_draw = false;
+                }
         }
 
         #[unsafe(method(acceptsFirstResponder))]
@@ -196,12 +206,18 @@ impl CustomView {
         menubar_height: f64,
         mtm: objc2::MainThreadMarker,
     ) -> Retained<Self> {
-        let state = AppState::new(config, elements, window_height, menubar_height);
-        let this = Self::alloc(mtm).set_ivars(Ivars {
-            state: RefCell::new(state),
-        });
-        // SAFETY: Calling super's init method is required for proper NSView initialization.
-        // The msg_send![super(...), init] pattern is standard for Objective-C subclass initialization.
-        unsafe { msg_send![super(this), init] }
+        unsafe {
+            msg_send![
+                super(Self::alloc(mtm).set_ivars(Ivars {
+                    state: RefCell::new(AppState::new(
+                        config,
+                        elements,
+                        window_height,
+                        menubar_height,
+                    )),
+                })),
+                init
+            ]
+        }
     }
 }

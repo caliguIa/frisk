@@ -31,10 +31,10 @@ impl AppState {
     ) -> Self {
         let font_size = config.font_size as f64;
         let calculator = Calculator::new().ok();
-        let mut state = Self {
+        Self {
             config,
             elements,
-            filtered_elements: Vec::new(),
+            filtered_elements: Vec::new(), // Start empty - will populate on first keystroke
             selected_index: 0,
             scroll_offset: 0,
             query: String::new(),
@@ -47,9 +47,7 @@ impl AppState {
             ),
             menubar_height,
             calculator,
-        };
-        state.update_search();
-        state
+        }
     }
 
     fn calculate_max_results(window_height: f64, font_size: f64, menubar_height: f64) -> usize {
@@ -169,14 +167,6 @@ impl AppState {
             self.cursor_position = word_start;
         }
         self.update_search();
-    }
-
-    pub fn delete_to_start(&mut self) {
-        if self.cursor_position > 0 {
-            self.query.drain(..self.cursor_position);
-            self.cursor_position = 0;
-            self.update_search();
-        }
     }
 
     pub fn insert_char(&mut self, c: char) {
