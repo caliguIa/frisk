@@ -2,6 +2,7 @@ use std::time::Instant;
 
 mod apps;
 mod args;
+mod cache;
 mod calculator;
 mod clipboard;
 mod config;
@@ -29,7 +30,7 @@ fn main() -> Result<()> {
     let after_config = Instant::now();
 
     let mut elements = apps::discover_applications()?;
-    
+
     // Add system commands
     use element::Element;
     elements.add(Element::new_system_command(
@@ -64,7 +65,7 @@ fn main() -> Result<()> {
         "Homebrew".to_string(),
         "__homebrew__".to_string(),
     ));
-    
+
     let after_discovery = Instant::now();
 
     crate::log!(

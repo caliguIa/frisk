@@ -23,16 +23,11 @@ struct CrateInfo {
     documentation: Option<String>,
 }
 
-/// Search crates.io API for Rust crates
-///
-/// Uses the official crates.io API: https://crates.io/api/v1/crates
-/// Returns up to 100 results, sorted by relevance
 pub fn search_crates(query: &str) -> Result<ElementList> {
     if query.is_empty() {
         return Ok(ElementList::new());
     }
 
-    // Simple URL encoding for query parameter
     let encoded = query
         .chars()
         .map(|c| {
@@ -55,7 +50,7 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_millis(800))
-        .user_agent("kickoff-darwin/0.1.0")
+        .user_agent("kickoff/0.1.0")
         .build()?;
 
     let response = client.get(&url).send()?;
@@ -64,7 +59,6 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
     let mut elements = ElementList::new();
 
     for crate_info in crates_response.crates {
-        // Format display name with version and download count
         let name = format!(
             "{} v{} (↓ {})",
             crate_info.name,
@@ -72,7 +66,6 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
             format_downloads(crate_info.downloads)
         );
 
-        // Value is the crates.io URL for the crate
         let value = format!("https://crates.io/crates/{}", crate_info.name);
 
         let element = Element::new_rust_crate(name, value);
@@ -83,7 +76,6 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
     Ok(elements)
 }
 
-/// Format download count with K/M suffixes
 fn format_downloads(downloads: u64) -> String {
     if downloads >= 1_000_000 {
         format!("{:.1}M", downloads as f64 / 1_000_000.0)
