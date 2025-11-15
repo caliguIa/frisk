@@ -7,6 +7,13 @@ use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
 use std::process::Command;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AppMode {
+    Normal,           // Regular app launcher
+    ClipboardHistory, // Clipboard history browser
+    NixpkgsSearch,    // Nixpkgs package search
+}
+
 pub struct AppState {
     pub config: Config,
     pub elements: ElementList,
@@ -18,6 +25,7 @@ pub struct AppState {
     pub should_exit: bool,
     pub dynamic_max_results: usize,
     pub menubar_height: f64,
+    pub mode: AppMode,
     calculator: Option<Calculator>,
     pub calculator_result: Option<Element>,
     pub prompt_query_cache: String,
@@ -45,6 +53,7 @@ impl AppState {
             should_exit: false,
             dynamic_max_results: max_results,
             menubar_height,
+            mode: AppMode::Normal,
             calculator: None,
             calculator_result: None,
             prompt_query_cache: String::with_capacity(64),
@@ -72,26 +81,60 @@ impl AppState {
     }
 
     pub fn update_search(&mut self) {
-        let indices = self.elements.search(&self.query);
+        match self.mode {
+            AppMode::Normal => {
+                // Normal app search with calculator
+                let indices = self.elements.search(&self.query);
 
-        if self.calculator.is_none() && !self.query.is_empty() {
-            self.calculator = Calculator::new().ok();
-        }
+                if self.calculator.is_none() && !self.query.is_empty() {
+                    self.calculator = Calculator::new().ok();
+                }
 
-        self.calculator_result = None;
-        if let Some(calc) = &mut self.calculator {
-            if !self.query.is_empty() {
-                if let Some(result) = calc.evaluate(&self.query) {
-                    self.calculator_result = Some(Element {
-                        name: result.clone().into_boxed_str(),
-                        value: result.into_boxed_str(),
-                        element_type: crate::element::ElementType::CalculatorResult,
-                    });
+                self.calculator_result = None;
+                if let Some(calc) = &mut self.calculator {
+                    if !self.query.is_empty() {
+                        if let Some(result) = calc.evaluate(&self.query) {
+                            self.calculator_result = Some(Element {
+                                name: result.clone().into_boxed_str(),
+                                value: result.into_boxed_str(),
+                                element_type: crate::element::ElementType::CalculatorResult,
+                            });
+                        }
+                    }
+                }
+
+                self.filtered_indices = indices;
+            }
+            AppMode::NixpkgsSearch => {
+                // Live API search on every keystroke
+                if self.query.is_empty() {
+                    self.filtered_indices = Vec::new();
+                    self.calculator_result = None;
+                } else {
+                    // Perform nixpkgs search via API
+                    match crate::nixpkgs::search_nixpkgs(&self.query) {
+                        Ok(packages) => {
+                            // Replace elements with search results
+                            self.elements = packages;
+                            self.filtered_indices = (0..self.elements.len()).collect();
+                            self.calculator_result = None;
+                        }
+                        Err(e) => {
+                            crate::log!("Nixpkgs search failed: {}", e);
+                            // Keep previous results on error
+                            self.calculator_result = None;
+                        }
+                    }
                 }
             }
+            AppMode::ClipboardHistory => {
+                // Just do normal fuzzy search through clipboard history
+                let indices = self.elements.search(&self.query);
+                self.filtered_indices = indices;
+                self.calculator_result = None;
+            }
         }
-
-        self.filtered_indices = indices;
+        
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
@@ -171,6 +214,76 @@ impl AppState {
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
+                                // Track in clipboard history
+                                let _ = crate::clipboard::add_to_clipboard_history(element.value.to_string());
+                                self.should_exit = true;
+                            } else {
+                                return Err(anyhow::anyhow!("Failed to copy"));
+                            }
+                        }
+                        ElementType::SystemCommand => {
+                            crate::log!("Executing system command: {}", element.name);
+                            let command = element.value.as_ref();
+                            
+                            // Check for special commands that switch modes
+                            if command == "__clipboard_history__" {
+                                // Switch to clipboard history mode
+                                crate::log!("Switching to clipboard history mode");
+                                match crate::clipboard::load_clipboard_history_elements() {
+                                    Ok(elements) => {
+                                        self.elements = elements;
+                                        self.mode = AppMode::ClipboardHistory;
+                                        self.query.clear();
+                                        self.cursor_position = 0;
+                                        self.update_search();
+                                    }
+                                    Err(e) => {
+                                        crate::log!("Failed to load clipboard history: {}", e);
+                                    }
+                                }
+                            } else if command == "__nixpkgs__" {
+                                // Switch to nixpkgs mode - start with empty list
+                                crate::log!("Switching to nixpkgs search mode");
+                                self.elements = ElementList::new();
+                                self.mode = AppMode::NixpkgsSearch;
+                                self.query.clear();
+                                self.cursor_position = 0;
+                                self.update_search();
+                            } else {
+                                // Execute the command
+                                Command::new("sh")
+                                    .arg("-c")
+                                    .arg(command)
+                                    .spawn()
+                                    .map_err(|e| anyhow::anyhow!("Failed to execute: {}", e))?;
+                                self.should_exit = true;
+                            }
+                        }
+                        ElementType::ClipboardHistory => {
+                            // Copy to clipboard (don't add back to history - it's already there)
+                            crate::log!("Copying clipboard history entry: {}", element.value);
+                            let pasteboard = NSPasteboard::generalPasteboard();
+                            pasteboard.clearContents();
+                            let ns_string = NSString::from_str(&element.value);
+                            if unsafe {
+                                pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
+                            } {
+                                self.should_exit = true;
+                            } else {
+                                return Err(anyhow::anyhow!("Failed to copy"));
+                            }
+                        }
+                        ElementType::NixPackage => {
+                            // Copy package name to clipboard
+                            crate::log!("Copying nixpkg name: {}", element.value);
+                            let pasteboard = NSPasteboard::generalPasteboard();
+                            pasteboard.clearContents();
+                            let ns_string = NSString::from_str(&element.value);
+                            if unsafe {
+                                pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
+                            } {
+                                // Track in clipboard history
+                                let _ = crate::clipboard::add_to_clipboard_history(element.value.to_string());
                                 self.should_exit = true;
                             } else {
                                 return Err(anyhow::anyhow!("Failed to copy"));

@@ -4,9 +4,11 @@ use std::time::Instant;
 mod apps;
 mod args;
 mod calculator;
+mod clipboard;
 mod config;
 mod element;
 mod gui;
+mod nixpkgs;
 
 #[macro_use]
 mod log;
@@ -23,11 +25,39 @@ fn main() -> Result<()> {
     let config = Config::load(args.config)?;
     let after_config = Instant::now();
 
-    let elements = apps::discover_applications()?;
+    let mut elements = apps::discover_applications()?;
+    
+    // Add system commands
+    use element::Element;
+    elements.add(Element::new_system_command(
+        "Empty Trash".to_string(),
+        "osascript -e 'tell application \"Finder\" to empty trash'".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Show Trash".to_string(),
+        "osascript -e 'tell application \"Finder\" to open trash' && open -a finder".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Restart".to_string(),
+        "osascript -e 'tell application \"System Events\" to restart'".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Shut Down".to_string(),
+        "osascript -e 'tell application \"System Events\" to shut down'".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Clipboard History".to_string(),
+        "__clipboard_history__".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Nixpkgs".to_string(),
+        "__nixpkgs__".to_string(),
+    ));
+    
     let after_discovery = Instant::now();
 
     crate::log!(
-        "Loaded {} apps, estimated memory: ~{} KB",
+        "Loaded {} items (apps + system commands), estimated memory: ~{} KB",
         elements.len(),
         elements.len() * 60 / 1024 // rough estimate
     );

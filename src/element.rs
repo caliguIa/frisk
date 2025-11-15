@@ -8,6 +8,9 @@ use nucleo_matcher::{
 pub enum ElementType {
     Application,
     CalculatorResult,
+    SystemCommand,
+    ClipboardHistory,
+    NixPackage,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -23,6 +26,30 @@ impl Element {
             name: name.into_boxed_str(),
             value: value.into_boxed_str(),
             element_type: ElementType::Application,
+        }
+    }
+
+    pub fn new_system_command(name: String, command: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: command.into_boxed_str(),
+            element_type: ElementType::SystemCommand,
+        }
+    }
+
+    pub fn new_clipboard_entry(name: String, value: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: value.into_boxed_str(),
+            element_type: ElementType::ClipboardHistory,
+        }
+    }
+
+    pub fn new_nix_package(name: String, value: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: value.into_boxed_str(),
+            element_type: ElementType::NixPackage,
         }
     }
 }
@@ -47,10 +74,6 @@ impl ElementList {
     }
 
     pub fn search(&mut self, query: &str) -> Vec<usize> {
-        // if query.is_empty() {
-        //     return Vec::new(); // Don't show all apps when query is empty
-        // }
-
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
         let mut matches: Vec<(usize, u32)> = Vec::with_capacity(20);
 

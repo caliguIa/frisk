@@ -210,6 +210,7 @@ define_class!(
                         drop(state);
                         self.ivars().state.borrow().terminate();
                     }
+                    self.setNeedsDisplay(true);
                     return;
                 }
                 KEY_UP => {
