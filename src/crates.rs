@@ -1,5 +1,5 @@
 use crate::element::{Element, ElementList};
-use anyhow::Result;
+use crate::error::Result;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -24,7 +24,7 @@ struct CrateInfo {
 }
 
 /// Search crates.io API for Rust crates
-/// 
+///
 /// Uses the official crates.io API: https://crates.io/api/v1/crates
 /// Returns up to 100 results, sorted by relevance
 pub fn search_crates(query: &str) -> Result<ElementList> {
@@ -32,9 +32,23 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
         return Ok(ElementList::new());
     }
 
+    // Simple URL encoding for query parameter
+    let encoded = query
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' {
+                c.to_string()
+            } else if c == ' ' {
+                "+".to_string()
+            } else {
+                format!("%{:02X}", c as u8)
+            }
+        })
+        .collect::<String>();
+
     let url = format!(
         "https://crates.io/api/v1/crates?page=1&per_page=100&q={}",
-        urlencoding::encode(query)
+        encoded
     );
 
     crate::log!("Searching crates.io: {}", url);
@@ -48,7 +62,7 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
     let crates_response: CratesResponse = response.json()?;
 
     let mut elements = ElementList::new();
-    
+
     for crate_info in crates_response.crates {
         // Format display name with version and download count
         let name = format!(
@@ -57,10 +71,10 @@ pub fn search_crates(query: &str) -> Result<ElementList> {
             crate_info.version,
             format_downloads(crate_info.downloads)
         );
-        
+
         // Value is the crates.io URL for the crate
         let value = format!("https://crates.io/crates/{}", crate_info.name);
-        
+
         let element = Element::new_rust_crate(name, value);
         elements.add(element);
     }

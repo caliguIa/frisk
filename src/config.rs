@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Error, Result};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSColor, NSFont};
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ impl Config {
             None => PathBuf::from(
                 std::env::var("XDG_CONFIG_HOME")
                     .or_else(|_| std::env::var("HOME").map(|home| format!("{}/.cache", home)))
-                    .context("Neither $XDG_CONFIG_HOME or $HOME variables are set.")?,
+                    .map_err(|_| Error::new("Neither $XDG_CONFIG_HOME or $HOME variables are set."))?,
             )
             .join("kickoff")
             .join("config.toml"),

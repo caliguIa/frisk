@@ -1,5 +1,5 @@
 use crate::element::{Element, ElementList};
-use anyhow::{Context, Result};
+use crate::error::{Error, Result};
 use path::PathBuf;
 use process::Command;
 use std::{
@@ -31,7 +31,7 @@ pub fn discover_applications() -> Result<ElementList> {
     let cache = PathBuf::from(
         env::var("XDG_CACHE_HOME")
             .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
-            .context("Neither $XDG_CACHE_HOME or $HOME variables are set")?,
+            .map_err(|_| Error::new("Neither $XDG_CACHE_HOME or $HOME variables are set"))?,
     )
     .join("kickoff")
     .join("apps.cache");

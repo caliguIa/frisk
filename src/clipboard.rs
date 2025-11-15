@@ -1,15 +1,18 @@
 use crate::element::{Element, ElementList};
-use anyhow::Result;
+use crate::error::Result;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use std::collections::VecDeque;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 
 const MAX_HISTORY: usize = 100;
 
 fn get_history_file() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    path.push(".config");
+    let mut path = env::var("XDG_CONFIG_HOME")
+        .or_else(|_| env::var("HOME").map(|home| format!("{}/.config", home)))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."));
     path.push("kickoff-macos");
     path.push("clipboard_history.txt");
     path

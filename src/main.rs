@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::time::Instant;
 
 mod apps;
@@ -8,6 +7,7 @@ mod clipboard;
 mod config;
 mod crates;
 mod element;
+mod error;
 mod gui;
 mod homebrew;
 mod nixpkgs;
@@ -17,6 +17,7 @@ mod log;
 
 use args::Args;
 use config::Config;
+use error::Result;
 
 fn main() -> Result<()> {
     let start = Instant::now();

@@ -1,7 +1,7 @@
 use super::view::CustomView;
 use crate::config::Config;
 use crate::element::ElementList;
-use anyhow::{anyhow, Result};
+use crate::error::{Error, Result};
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
@@ -16,7 +16,7 @@ pub fn create_window(
     elements: ElementList,
 ) -> Result<Retained<BorderlessKeyWindow>> {
     let active_screen =
-        NSScreen::mainScreen(mtm).ok_or_else(|| anyhow!("Failed to find main screen"))?;
+        NSScreen::mainScreen(mtm).ok_or_else(|| Error::new("Failed to find main screen"))?;
     let window_rect = calculate_window_rect(&active_screen);
 
     let window: Retained<BorderlessKeyWindow> = unsafe {

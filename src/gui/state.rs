@@ -1,7 +1,7 @@
 use crate::calculator::Calculator;
 use crate::config::Config;
 use crate::element::{Element, ElementList, ElementType};
-use anyhow::Result;
+use crate::error::{Error, Result};
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
@@ -265,7 +265,7 @@ impl AppState {
                 if unsafe { pasteboard.setString_forType(&ns_string, NSPasteboardTypeString) } {
                     self.should_exit = true;
                 } else {
-                    return Err(anyhow::anyhow!("Failed to copy"));
+                    return Err(Error::new("Failed to copy"));
                 }
             }
         } else {
@@ -285,7 +285,7 @@ impl AppState {
                                 .arg("-a")
                                 .arg(element.value.as_ref())
                                 .spawn()
-                                .map_err(|e| anyhow::anyhow!("Failed to launch: {}", e))?;
+                                .map_err(|e| Error::new(format!("Failed to launch: {}", e)))?;
                             self.should_exit = true;
                         }
                         ElementType::CalculatorResult => {
@@ -303,7 +303,7 @@ impl AppState {
                                 );
                                 self.should_exit = true;
                             } else {
-                                return Err(anyhow::anyhow!("Failed to copy"));
+                                return Err(Error::new("Failed to copy"));
                             }
                         }
                         ElementType::SystemCommand => {
@@ -356,7 +356,7 @@ impl AppState {
                                     .arg("-c")
                                     .arg(command)
                                     .spawn()
-                                    .map_err(|e| anyhow::anyhow!("Failed to execute: {}", e))?;
+                                    .map_err(|e| Error::new(format!("Failed to execute: {}", e)))?;
                                 self.should_exit = true;
                             }
                         }
@@ -371,7 +371,7 @@ impl AppState {
                             } {
                                 self.should_exit = true;
                             } else {
-                                return Err(anyhow::anyhow!("Failed to copy"));
+                                return Err(Error::new("Failed to copy"));
                             }
                         }
                         ElementType::NixPackage => {
@@ -389,7 +389,7 @@ impl AppState {
                                 );
                                 self.should_exit = true;
                             } else {
-                                return Err(anyhow::anyhow!("Failed to copy"));
+                                return Err(Error::new("Failed to copy"));
                             }
                         }
                         ElementType::RustCrate => {
@@ -398,7 +398,7 @@ impl AppState {
                             Command::new("open")
                                 .arg(element.value.as_ref())
                                 .spawn()
-                                .map_err(|e| anyhow::anyhow!("Failed to open URL: {}", e))?;
+                                .map_err(|e| Error::new(format!("Failed to open URL: {}", e)))?;
                             self.should_exit = true;
                         }
                         ElementType::HomebrewPackage => {
@@ -407,7 +407,7 @@ impl AppState {
                             Command::new("open")
                                 .arg(element.value.as_ref())
                                 .spawn()
-                                .map_err(|e| anyhow::anyhow!("Failed to open URL: {}", e))?;
+                                .map_err(|e| Error::new(format!("Failed to open URL: {}", e)))?;
                             self.should_exit = true;
                         }
                     }
