@@ -14,6 +14,7 @@ pub enum AppMode {
     ClipboardHistory, // Clipboard history browser
     NixpkgsSearch,    // Nixpkgs package search
     CratesSearch,     // Crates.io search
+    HomebrewSearch,   // Homebrew formulae/cask search
 }
 
 pub struct AppState {
@@ -140,6 +141,19 @@ impl AppState {
                     self.is_searching = true;
                 }
             }
+            AppMode::HomebrewSearch => {
+                // Mark the time of query change for debouncing
+                self.last_query_time = Instant::now();
+
+                if self.query.is_empty() {
+                    self.filtered_indices = Vec::new();
+                    self.calculator_result = None;
+                    self.is_searching = false;
+                } else {
+                    // Don't search immediately - will be triggered by check_debounced_search
+                    self.is_searching = true;
+                }
+            }
             AppMode::ClipboardHistory => {
                 // Just do normal fuzzy search through clipboard history
                 let indices = self.elements.search(&self.query);
@@ -152,12 +166,12 @@ impl AppState {
         self.scroll_offset = 0;
     }
 
-    /// Check if enough time has passed to perform API search (nixpkgs or crates)
+    /// Check if enough time has passed to perform API search (nixpkgs, crates, or homebrew)
     /// Returns true if search was performed
     pub fn check_debounced_search(&mut self) -> bool {
         const DEBOUNCE_MS: u64 = 300;
 
-        if !matches!(self.mode, AppMode::NixpkgsSearch | AppMode::CratesSearch) || !self.is_searching {
+        if !matches!(self.mode, AppMode::NixpkgsSearch | AppMode::CratesSearch | AppMode::HomebrewSearch) || !self.is_searching {
             return false;
         }
 
@@ -182,6 +196,10 @@ impl AppState {
             AppMode::CratesSearch => {
                 crate::log!("Performing debounced crates search for: {}", self.query);
                 crate::crates::search_crates(&self.query)
+            }
+            AppMode::HomebrewSearch => {
+                crate::log!("Performing debounced homebrew search for: {}", self.query);
+                crate::homebrew::search_homebrew(&self.query)
             }
             _ => return false,
         };
@@ -324,6 +342,14 @@ impl AppState {
                                 self.query.clear();
                                 self.cursor_position = 0;
                                 self.update_search();
+                            } else if command == "__homebrew__" {
+                                // Switch to homebrew mode - start with empty list
+                                crate::log!("Switching to homebrew search mode");
+                                self.elements = ElementList::new();
+                                self.mode = AppMode::HomebrewSearch;
+                                self.query.clear();
+                                self.cursor_position = 0;
+                                self.update_search();
                             } else {
                                 // Execute the command
                                 Command::new("sh")
@@ -369,6 +395,15 @@ impl AppState {
                         ElementType::RustCrate => {
                             // Open crate URL in browser
                             crate::log!("Opening crate URL: {}", element.value);
+                            Command::new("open")
+                                .arg(element.value.as_ref())
+                                .spawn()
+                                .map_err(|e| anyhow::anyhow!("Failed to open URL: {}", e))?;
+                            self.should_exit = true;
+                        }
+                        ElementType::HomebrewPackage => {
+                            // Open homebrew package URL in browser
+                            crate::log!("Opening homebrew URL: {}", element.value);
                             Command::new("open")
                                 .arg(element.value.as_ref())
                                 .spawn()

@@ -32,11 +32,8 @@ define_class!(
         fn draw_rect(&self, _dirty_rect: NSRect) {
             let mut state = self.ivars().state.borrow_mut();
 
-            if state.check_debounced_search() {
-                drop(state);
-                self.setNeedsDisplay(true);
-                return;
-            }
+            // Check for debounced search but continue drawing regardless
+            let _search_completed = state.check_debounced_search();
 
             state.update_string_caches();
 

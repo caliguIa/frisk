@@ -12,6 +12,7 @@ pub enum ElementType {
     ClipboardHistory,
     NixPackage,
     RustCrate,
+    HomebrewPackage,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -59,6 +60,14 @@ impl Element {
             name: name.into_boxed_str(),
             value: url.into_boxed_str(),
             element_type: ElementType::RustCrate,
+        }
+    }
+
+    pub fn new_homebrew_package(name: String, url: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: url.into_boxed_str(),
+            element_type: ElementType::HomebrewPackage,
         }
     }
 }

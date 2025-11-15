@@ -9,6 +9,7 @@ mod config;
 mod crates;
 mod element;
 mod gui;
+mod homebrew;
 mod nixpkgs;
 
 #[macro_use]
@@ -57,6 +58,10 @@ fn main() -> Result<()> {
     elements.add(Element::new_system_command(
         "Crates.io".to_string(),
         "__crates__".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Homebrew".to_string(),
+        "__homebrew__".to_string(),
     ));
     
     let after_discovery = Instant::now();
