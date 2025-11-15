@@ -21,6 +21,9 @@ struct Hit {
 #[derive(Debug, Deserialize, Clone)]
 struct Package {
     package_attr_name: String,
+    #[serde(rename = "package_pversion")]
+    package_version: Option<String>,
+    #[allow(dead_code)]
     package_description: Option<String>,
 }
 
@@ -182,13 +185,10 @@ pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
 
     for hit in search_response.hits.hits {
         let pkg = hit.source;
-        let display = if let Some(desc) = &pkg.package_description {
-            let desc_short = if desc.len() > 80 {
-                format!("{}...", &desc[..80])
-            } else {
-                desc.clone()
-            };
-            format!("{} - {}", pkg.package_attr_name, desc_short)
+        
+        // Format: name v1.2.3 (like crates.io)
+        let display = if let Some(version) = &pkg.package_version {
+            format!("{} v{}", pkg.package_attr_name, version)
         } else {
             pkg.package_attr_name.clone()
         };

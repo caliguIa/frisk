@@ -11,15 +11,25 @@ struct FormulaInfo {
     name: String,
     #[serde(rename = "full_name")]
     full_name: Option<String>,
+    #[serde(rename = "versions")]
+    versions: Option<Versions>,
+    #[allow(dead_code)]
     desc: Option<String>,
     #[allow(dead_code)]
     homepage: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+struct Versions {
+    stable: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct CaskInfo {
     token: String,
     name: Vec<String>,
+    version: Option<String>,
+    #[allow(dead_code)]
     desc: Option<String>,
     #[allow(dead_code)]
     homepage: Option<String>,
@@ -27,6 +37,7 @@ struct CaskInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CachedData {
+    version: u32,  // Cache version - increment to invalidate old caches
     timestamp: SystemTime,
     formulae: Vec<FormulaInfo>,
     casks: Vec<CaskInfo>,
@@ -36,6 +47,7 @@ struct CachedData {
 static HOMEBREW_CACHE: OnceLock<(Vec<FormulaInfo>, Vec<CaskInfo>)> = OnceLock::new();
 
 const CACHE_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
+const CACHE_VERSION: u32 = 2; // Increment when cache format changes
 
 fn get_cache_path() -> Result<PathBuf> {
     let cache_dir = dirs::cache_dir()
@@ -57,6 +69,12 @@ fn load_from_disk() -> Option<(Vec<FormulaInfo>, Vec<CaskInfo>)> {
     let cache_data = fs::read_to_string(&cache_path).ok()?;
     let cached: CachedData = serde_json::from_str(&cache_data).ok()?;
     
+    // Check cache version
+    if cached.version != CACHE_VERSION {
+        crate::log!("Disk cache version mismatch (expected {}, got {})", CACHE_VERSION, cached.version);
+        return None;
+    }
+    
     // Check if cache is still valid (< 24 hours old)
     let age = SystemTime::now().duration_since(cached.timestamp).ok()?;
     if age > CACHE_DURATION {
@@ -72,6 +90,7 @@ fn save_to_disk(formulae: &[FormulaInfo], casks: &[CaskInfo]) -> Result<()> {
     let cache_path = get_cache_path()?;
     
     let cached = CachedData {
+        version: CACHE_VERSION,
         timestamp: SystemTime::now(),
         formulae: formulae.to_vec(),
         casks: casks.to_vec(),
@@ -181,20 +200,9 @@ fn fetch_casks(client: &reqwest::blocking::Client) -> Result<Vec<CaskInfo>> {
     Ok(casks)
 }
 
-fn matches_query(name: &str, desc: &Option<String>, query: &str) -> bool {
-    // Match on name (most important)
-    if name.to_lowercase().contains(query) {
-        return true;
-    }
-    
-    // Match on description
-    if let Some(desc) = desc {
-        if desc.to_lowercase().contains(query) {
-            return true;
-        }
-    }
-    
-    false
+fn matches_query(name: &str, _desc: &Option<String>, query: &str) -> bool {
+    // Match on name only
+    name.to_lowercase().contains(query)
 }
 
 fn matches_cask_query(cask: &CaskInfo, query: &str) -> bool {
@@ -210,30 +218,20 @@ fn matches_cask_query(cask: &CaskInfo, query: &str) -> bool {
         }
     }
     
-    // Match on description
-    if let Some(desc) = &cask.desc {
-        if desc.to_lowercase().contains(query) {
-            return true;
-        }
-    }
-    
     false
 }
 
 fn format_formula_name(formula: &FormulaInfo) -> String {
     let name = formula.full_name.as_ref().unwrap_or(&formula.name);
     
-    if let Some(desc) = &formula.desc {
-        // Truncate long descriptions
-        let short_desc = if desc.len() > 60 {
-            format!("{}...", &desc[..57])
-        } else {
-            desc.clone()
-        };
-        format!("{} - {}", name, short_desc)
-    } else {
-        name.clone()
+    // Format: name v1.2.3 (like crates.io)
+    if let Some(versions) = &formula.versions {
+        if let Some(version) = &versions.stable {
+            return format!("{} v{}", name, version);
+        }
     }
+    
+    name.clone()
 }
 
 fn format_cask_name(cask: &CaskInfo) -> String {
@@ -243,14 +241,9 @@ fn format_cask_name(cask: &CaskInfo) -> String {
         cask.token.clone()
     };
     
-    if let Some(desc) = &cask.desc {
-        // Truncate long descriptions
-        let short_desc = if desc.len() > 60 {
-            format!("{}...", &desc[..57])
-        } else {
-            desc.clone()
-        };
-        format!("{} (cask) - {}", display_name, short_desc)
+    // Format: name (cask) v1.2.3 (like crates.io)
+    if let Some(version) = &cask.version {
+        format!("{} (cask) v{}", display_name, version)
     } else {
         format!("{} (cask)", display_name)
     }
