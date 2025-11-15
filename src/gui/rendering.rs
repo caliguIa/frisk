@@ -6,7 +6,8 @@ use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize, NSString};
 
 pub fn draw_text(text: &str, x: f64, y: f64, color: &Retained<NSColor>, font: &Retained<NSFont>) {
     let ns_text = NSString::from_str(text);
-    let full_range = NSRange::new(0, ns_text.len());
+    let char_count = ns_text.length();
+    let full_range = NSRange::new(0, char_count);
 
     unsafe {
         extern "C" {
@@ -60,7 +61,8 @@ pub fn draw_cursor(x: f64, y: f64, color: &Retained<NSColor>, font_size: f64) {
 
 pub fn measure_text_width(text: &str, font: &Retained<NSFont>) -> f64 {
     let ns_text = NSString::from_str(text);
-    let full_range = NSRange::new(0, ns_text.len());
+    let char_count = ns_text.length();
+    let full_range = NSRange::new(0, char_count);
 
     unsafe {
         extern "C" {

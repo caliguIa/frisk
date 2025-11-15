@@ -49,26 +49,30 @@ fn get_search_url() -> Result<String> {
         .get("https://raw.githubusercontent.com/NixOS/nixos-search/main/version.nix")
         .send()?;
     let text = resp.text()?;
-    
+
     let re = regex::Regex::new(r#"frontend\s*=\s*"([^"]+)"\s*;"#)?;
-    let frontend = re.captures(&text)
+    let frontend = re
+        .captures(&text)
         .and_then(|cap| cap.get(1))
         .ok_or_else(|| anyhow::anyhow!("Cannot parse frontend version"))?
         .as_str();
-    
-    Ok(format!("https://search.nixos.org/backend/latest-{}-nixos-unstable/_search", frontend))
+
+    Ok(format!(
+        "https://search.nixos.org/backend/latest-{}-nixos-unstable/_search",
+        frontend
+    ))
 }
 
 // Search with full query fields like Raycast - called on every keystroke
 pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
     let mut elements = ElementList::new();
-    
+
     if query.is_empty() {
         return Ok(elements);
     }
-    
+
     let url = get_search_url()?;
-    
+
     // Full query fields from Raycast extension
     let query_fields = vec![
         "package_attr_name^9",
@@ -96,10 +100,9 @@ pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
         "flake_name_reverse^0.4",
         "flake_name_reverse.edge^0.4",
     ];
-    
-    // Reversed query for better matching
+
     let reversed_query: String = query.chars().rev().collect();
-    
+
     let search_query = SearchQuery {
         size: 50,
         sort: vec![
@@ -109,75 +112,74 @@ pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
         ],
         query: QueryBody {
             bool: BoolQuery {
-                filter: vec![
-                    serde_json::json!({
-                        "term": {
-                            "type": {
-                                "value": "package",
-                                "_name": "filter_packages"
-                            }
+                filter: vec![serde_json::json!({
+                    "term": {
+                        "type": {
+                            "value": "package",
+                            "_name": "filter_packages"
                         }
-                    })
-                ],
-                must: vec![
-                    serde_json::json!({
-                        "dis_max": {
-                            "tie_breaker": 0.7,
-                            "queries": [
-                                {
-                                    "multi_match": {
-                                        "type": "cross_fields",
-                                        "query": query,
-                                        "analyzer": "whitespace",
-                                        "auto_generate_synonyms_phrase_query": false,
-                                        "operator": "and",
-                                        "_name": format!("multi_match_{}", query),
-                                        "fields": query_fields.clone(),
-                                    }
-                                },
-                                {
-                                    "multi_match": {
-                                        "type": "cross_fields",
-                                        "query": reversed_query,
-                                        "analyzer": "whitespace",
-                                        "auto_generate_synonyms_phrase_query": false,
-                                        "operator": "and",
-                                        "_name": format!("multi_match_{}", reversed_query),
-                                        "fields": query_fields,
-                                    }
-                                },
-                                {
-                                    "wildcard": {
-                                        "package_attr_name": {
-                                            "value": format!("*{}*", query)
-                                        }
+                    }
+                })],
+                must: vec![serde_json::json!({
+                    "dis_max": {
+                        "tie_breaker": 0.7,
+                        "queries": [
+                            {
+                                "multi_match": {
+                                    "type": "cross_fields",
+                                    "query": query,
+                                    "analyzer": "whitespace",
+                                    "auto_generate_synonyms_phrase_query": false,
+                                    "operator": "and",
+                                    "_name": format!("multi_match_{}", query),
+                                    "fields": query_fields.clone(),
+                                }
+                            },
+                            {
+                                "multi_match": {
+                                    "type": "cross_fields",
+                                    "query": reversed_query,
+                                    "analyzer": "whitespace",
+                                    "auto_generate_synonyms_phrase_query": false,
+                                    "operator": "and",
+                                    "_name": format!("multi_match_{}", reversed_query),
+                                    "fields": query_fields,
+                                }
+                            },
+                            {
+                                "wildcard": {
+                                    "package_attr_name": {
+                                        "value": format!("*{}*", query)
                                     }
                                 }
-                            ]
-                        }
-                    })
-                ],
+                            }
+                        ]
+                    }
+                })],
             },
         },
     };
-    
+
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_millis(800)) // 800ms timeout - fast enough to feel responsive
         .build()?;
-        
+
     let resp = client
         .post(&url)
-        .header("Authorization", "Basic YVdWU0FMWHBadjpYOGdQSG56TDUyd0ZFZWt1eHNmUTljU2g=")
+        .header(
+            "Authorization",
+            "Basic YVdWU0FMWHBadjpYOGdQSG56TDUyd0ZFZWt1eHNmUTljU2g=",
+        )
         .header("Content-Type", "application/json")
         .json(&search_query)
         .send()?;
-    
+
     if !resp.status().is_success() {
         return Err(anyhow::anyhow!("Search failed: {}", resp.status()));
     }
-    
+
     let search_response: SearchResponse = resp.json()?;
-    
+
     for hit in search_response.hits.hits {
         let pkg = hit.source;
         let display = if let Some(desc) = &pkg.package_description {
@@ -190,9 +192,9 @@ pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
         } else {
             pkg.package_attr_name.clone()
         };
-        
+
         elements.add(Element::new_nix_package(display, pkg.package_attr_name));
     }
-    
+
     Ok(elements)
 }

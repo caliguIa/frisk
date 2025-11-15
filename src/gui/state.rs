@@ -6,12 +6,14 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AppMode {
     Normal,           // Regular app launcher
     ClipboardHistory, // Clipboard history browser
     NixpkgsSearch,    // Nixpkgs package search
+    CratesSearch,     // Crates.io search
 }
 
 pub struct AppState {
@@ -30,6 +32,10 @@ pub struct AppState {
     pub calculator_result: Option<Element>,
     pub prompt_query_cache: String,
     pub cursor_text_cache: String,
+    // Debouncing for nixpkgs search
+    last_query_time: Instant,
+    pub last_search_query: String,
+    pub is_searching: bool,
 }
 
 impl AppState {
@@ -58,6 +64,9 @@ impl AppState {
             calculator_result: None,
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
+            last_query_time: Instant::now(),
+            last_search_query: String::new(),
+            is_searching: false,
         };
         state.update_search();
         state
@@ -106,25 +115,29 @@ impl AppState {
                 self.filtered_indices = indices;
             }
             AppMode::NixpkgsSearch => {
-                // Live API search on every keystroke
+                // Mark the time of query change for debouncing
+                self.last_query_time = Instant::now();
+
                 if self.query.is_empty() {
                     self.filtered_indices = Vec::new();
                     self.calculator_result = None;
+                    self.is_searching = false;
                 } else {
-                    // Perform nixpkgs search via API
-                    match crate::nixpkgs::search_nixpkgs(&self.query) {
-                        Ok(packages) => {
-                            // Replace elements with search results
-                            self.elements = packages;
-                            self.filtered_indices = (0..self.elements.len()).collect();
-                            self.calculator_result = None;
-                        }
-                        Err(e) => {
-                            crate::log!("Nixpkgs search failed: {}", e);
-                            // Keep previous results on error
-                            self.calculator_result = None;
-                        }
-                    }
+                    // Don't search immediately - will be triggered by check_debounced_search
+                    self.is_searching = true;
+                }
+            }
+            AppMode::CratesSearch => {
+                // Mark the time of query change for debouncing
+                self.last_query_time = Instant::now();
+
+                if self.query.is_empty() {
+                    self.filtered_indices = Vec::new();
+                    self.calculator_result = None;
+                    self.is_searching = false;
+                } else {
+                    // Don't search immediately - will be triggered by check_debounced_search
+                    self.is_searching = true;
                 }
             }
             AppMode::ClipboardHistory => {
@@ -134,9 +147,61 @@ impl AppState {
                 self.calculator_result = None;
             }
         }
-        
+
         self.selected_index = 0;
         self.scroll_offset = 0;
+    }
+
+    /// Check if enough time has passed to perform API search (nixpkgs or crates)
+    /// Returns true if search was performed
+    pub fn check_debounced_search(&mut self) -> bool {
+        const DEBOUNCE_MS: u64 = 300;
+
+        if !matches!(self.mode, AppMode::NixpkgsSearch | AppMode::CratesSearch) || !self.is_searching {
+            return false;
+        }
+
+        // Check if debounce period has elapsed
+        let elapsed = self.last_query_time.elapsed();
+        if elapsed < Duration::from_millis(DEBOUNCE_MS) {
+            return false;
+        }
+
+        // Check if query changed since last search
+        if self.query == self.last_search_query {
+            self.is_searching = false;
+            return false;
+        }
+
+        // Perform the search based on mode
+        let search_result = match self.mode {
+            AppMode::NixpkgsSearch => {
+                crate::log!("Performing debounced nixpkgs search for: {}", self.query);
+                crate::nixpkgs::search_nixpkgs(&self.query)
+            }
+            AppMode::CratesSearch => {
+                crate::log!("Performing debounced crates search for: {}", self.query);
+                crate::crates::search_crates(&self.query)
+            }
+            _ => return false,
+        };
+
+        match search_result {
+            Ok(results) => {
+                self.elements = results;
+                self.filtered_indices = (0..self.elements.len()).collect();
+                self.calculator_result = None;
+                self.last_search_query = self.query.clone();
+                self.is_searching = false;
+                crate::log!("Found {} results", self.elements.len());
+                true
+            }
+            Err(e) => {
+                crate::log!("Search failed: {}", e);
+                self.is_searching = false;
+                false
+            }
+        }
     }
 
     pub fn update_string_caches(&mut self) {
@@ -215,7 +280,9 @@ impl AppState {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
                                 // Track in clipboard history
-                                let _ = crate::clipboard::add_to_clipboard_history(element.value.to_string());
+                                let _ = crate::clipboard::add_to_clipboard_history(
+                                    element.value.to_string(),
+                                );
                                 self.should_exit = true;
                             } else {
                                 return Err(anyhow::anyhow!("Failed to copy"));
@@ -224,7 +291,7 @@ impl AppState {
                         ElementType::SystemCommand => {
                             crate::log!("Executing system command: {}", element.name);
                             let command = element.value.as_ref();
-                            
+
                             // Check for special commands that switch modes
                             if command == "__clipboard_history__" {
                                 // Switch to clipboard history mode
@@ -246,6 +313,14 @@ impl AppState {
                                 crate::log!("Switching to nixpkgs search mode");
                                 self.elements = ElementList::new();
                                 self.mode = AppMode::NixpkgsSearch;
+                                self.query.clear();
+                                self.cursor_position = 0;
+                                self.update_search();
+                            } else if command == "__crates__" {
+                                // Switch to crates mode - start with empty list
+                                crate::log!("Switching to crates search mode");
+                                self.elements = ElementList::new();
+                                self.mode = AppMode::CratesSearch;
                                 self.query.clear();
                                 self.cursor_position = 0;
                                 self.update_search();
@@ -283,11 +358,22 @@ impl AppState {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
                                 // Track in clipboard history
-                                let _ = crate::clipboard::add_to_clipboard_history(element.value.to_string());
+                                let _ = crate::clipboard::add_to_clipboard_history(
+                                    element.value.to_string(),
+                                );
                                 self.should_exit = true;
                             } else {
                                 return Err(anyhow::anyhow!("Failed to copy"));
                             }
+                        }
+                        ElementType::RustCrate => {
+                            // Open crate URL in browser
+                            crate::log!("Opening crate URL: {}", element.value);
+                            Command::new("open")
+                                .arg(element.value.as_ref())
+                                .spawn()
+                                .map_err(|e| anyhow::anyhow!("Failed to open URL: {}", e))?;
+                            self.should_exit = true;
                         }
                     }
                 }

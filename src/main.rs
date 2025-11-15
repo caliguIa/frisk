@@ -6,6 +6,7 @@ mod args;
 mod calculator;
 mod clipboard;
 mod config;
+mod crates;
 mod element;
 mod gui;
 mod nixpkgs;
@@ -52,6 +53,10 @@ fn main() -> Result<()> {
     elements.add(Element::new_system_command(
         "Nixpkgs".to_string(),
         "__nixpkgs__".to_string(),
+    ));
+    elements.add(Element::new_system_command(
+        "Crates.io".to_string(),
+        "__crates__".to_string(),
     ));
     
     let after_discovery = Instant::now();

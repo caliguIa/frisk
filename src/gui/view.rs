@@ -31,6 +31,13 @@ define_class!(
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty_rect: NSRect) {
             let mut state = self.ivars().state.borrow_mut();
+
+            if state.check_debounced_search() {
+                drop(state);
+                self.setNeedsDisplay(true);
+                return;
+            }
+
             state.update_string_caches();
 
             let bounds = self.bounds();
@@ -112,8 +119,13 @@ define_class!(
 
             let has_results = state.calculator_result.is_some() || !state.filtered_indices.is_empty();
             if !has_results && !state.query.is_empty() {
+                let message = if state.is_searching {
+                    "Searching..."
+                } else {
+                    "No results"
+                };
                 draw_text(
-                    "No results",
+                    message,
                     padding,
                     results_start_y,
                     &state.config.items_color,
