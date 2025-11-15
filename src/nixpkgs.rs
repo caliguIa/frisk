@@ -54,18 +54,29 @@ pub fn search_nixpkgs(query: &str) -> Result<ElementList> {
 
     let url = get_search_url()?;
 
-    // Simple wildcard query - just search package names
     let search_body = format!(
         r#"{{
             "size": 50,
             "query": {{
                 "bool": {{
                     "filter": [{{"term": {{"type": "package"}}}}],
-                    "must": [{{"wildcard": {{"package_attr_name": "*{}*"}}}}]
+                    "must": [{{
+                        "multi_match": {{
+                            "query": "{}",
+                            "type": "best_fields",
+                            "fields": [
+                                "package_attr_name^9",
+                                "package_pname^6",
+                                "package_attr_name_query^4"
+                            ],
+                            "operator": "or",
+                            "fuzziness": "AUTO"
+                        }}
+                    }}]
                 }}
             }}
         }}"#,
-        query.to_lowercase()
+        query.to_lowercase().replace('"', "\\\"")
     );
 
     let client = reqwest::blocking::Client::builder()

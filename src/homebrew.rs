@@ -12,6 +12,7 @@ struct FormulaInfo {
     name: String,
     #[serde(rename = "versions")]
     versions: Option<Versions>,
+    homepage: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -24,10 +25,11 @@ struct CaskInfo {
     token: String,
     name: Vec<String>,
     version: Option<String>,
+    homepage: Option<String>,
 }
 
-// Simple text cache format: one line per package
-static HOMEBREW_CACHE: OnceLock<Vec<(String, Option<String>, bool)>> = OnceLock::new();
+// Cache format: name\tversion\tis_cask\thomepage
+static HOMEBREW_CACHE: OnceLock<Vec<(String, Option<String>, bool, Option<String>)>> = OnceLock::new();
 
 const CACHE_DURATION: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -43,7 +45,7 @@ fn get_cache_path() -> Result<PathBuf> {
     Ok(cache_dir.join("homebrew_cache.txt"))
 }
 
-fn load_from_disk() -> Option<Vec<(String, Option<String>, bool)>> {
+fn load_from_disk() -> Option<Vec<(String, Option<String>, bool, Option<String>)>> {
     let cache_path = get_cache_path().ok()?;
     
     if !cache_path.exists() {
@@ -63,11 +65,12 @@ fn load_from_disk() -> Option<Vec<(String, Option<String>, bool)>> {
     
     for line in content.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 3 {
+        if parts.len() >= 4 {
             let name = parts[0].to_string();
             let version = if parts[1].is_empty() { None } else { Some(parts[1].to_string()) };
             let is_cask = parts[2] == "1";
-            packages.push((name, version, is_cask));
+            let homepage = if parts[3].is_empty() { None } else { Some(parts[3].to_string()) };
+            packages.push((name, version, is_cask, homepage));
         }
     }
     
@@ -75,14 +78,15 @@ fn load_from_disk() -> Option<Vec<(String, Option<String>, bool)>> {
     Some(packages)
 }
 
-fn save_to_disk(packages: &[(String, Option<String>, bool)]) -> Result<()> {
+fn save_to_disk(packages: &[(String, Option<String>, bool, Option<String>)]) -> Result<()> {
     let cache_path = get_cache_path()?;
     
     let mut lines = Vec::new();
-    for (name, version, is_cask) in packages {
+    for (name, version, is_cask, homepage) in packages {
         let version_str = version.as_deref().unwrap_or("");
         let cask_flag = if *is_cask { "1" } else { "0" };
-        lines.push(format!("{}\t{}\t{}", name, version_str, cask_flag));
+        let homepage_str = homepage.as_deref().unwrap_or("");
+        lines.push(format!("{}\t{}\t{}\t{}", name, version_str, cask_flag, homepage_str));
     }
     
     fs::write(&cache_path, lines.join("\n"))?;
@@ -118,7 +122,7 @@ pub fn search_homebrew(query: &str) -> Result<ElementList> {
     let mut elements = ElementList::new();
     let query_lower = query.to_lowercase();
 
-    for (name, version, is_cask) in packages {
+    for (name, version, is_cask, homepage) in packages {
         if name.to_lowercase().contains(&query_lower) {
             let display = if let Some(ver) = version {
                 if *is_cask {
@@ -134,7 +138,10 @@ pub fn search_homebrew(query: &str) -> Result<ElementList> {
                 }
             };
             
-            let url = if *is_cask {
+            // Use homepage if available, otherwise fallback to formulae.brew.sh
+            let url = if let Some(home) = homepage {
+                home.clone()
+            } else if *is_cask {
                 format!("https://formulae.brew.sh/cask/{}", name)
             } else {
                 format!("https://formulae.brew.sh/formula/{}", name)
@@ -147,7 +154,7 @@ pub fn search_homebrew(query: &str) -> Result<ElementList> {
     Ok(elements)
 }
 
-fn download_homebrew_data() -> Result<Vec<(String, Option<String>, bool)>> {
+fn download_homebrew_data() -> Result<Vec<(String, Option<String>, bool, Option<String>)>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .user_agent("kickoff-darwin/0.1.0")
@@ -163,7 +170,7 @@ fn download_homebrew_data() -> Result<Vec<(String, Option<String>, bool)>> {
     
     for formula in formulae {
         let version = formula.versions.and_then(|v| v.stable);
-        packages.push((formula.name, version, false));
+        packages.push((formula.name, version, false, formula.homepage));
     }
 
     // Fetch casks
@@ -178,7 +185,7 @@ fn download_homebrew_data() -> Result<Vec<(String, Option<String>, bool)>> {
         } else {
             cask.token.clone()
         };
-        packages.push((display_name, cask.version, true));
+        packages.push((display_name, cask.version, true, cask.homepage));
     }
 
     crate::log!("Downloaded {} packages", packages.len());
