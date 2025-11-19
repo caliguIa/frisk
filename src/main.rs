@@ -41,6 +41,7 @@ fn main() -> Result<()> {
                 DaemonCommands::Apps => daemons::apps::run(),
                 DaemonCommands::Homebrew => daemons::homebrew::run(),
                 DaemonCommands::Clipboard => daemons::clipboard::run(),
+                DaemonCommands::Nixpkgs => daemons::nixpkgs::run(),
             }
         }
         None => {
@@ -73,12 +74,11 @@ fn check_single_instance(cli: &Cli) -> Result<bool> {
                         commands: cli.commands,
                         sources: cli.source.iter().map(|p| p.display().to_string()).collect(),
                     };
-                    
-                    // Try to send IPC message - if it fails, fall through and start new instance
+
                     if ipc::send_message(&msg).is_ok() {
-                        return Ok(true); // Successfully sent message
+                        return Ok(true);
                     }
-                    // If send failed (socket doesn't exist), remove stale lock and continue
+                    // If socket doesn't exist remove stale lock and continue
                     let _ = fs::remove_file(&lock_file);
                 }
             }
@@ -91,7 +91,7 @@ fn check_single_instance(cli: &Cli) -> Result<bool> {
 
     *LOCK_FILE.lock().unwrap() = Some(lock_file);
 
-    Ok(false) // No existing instance
+    Ok(false)
 }
 
 fn cleanup_lock_file() {
@@ -101,23 +101,17 @@ fn cleanup_lock_file() {
 }
 
 fn get_lock_file_path() -> Result<PathBuf> {
-    let runtime_dir = if let Ok(dir) = std::env::var("TMPDIR") {
-        PathBuf::from(dir)
-    } else {
-        PathBuf::from("/tmp")
-    };
+    let runtime_dir = PathBuf::from("/tmp");
     Ok(runtime_dir.join("frisk.lock"))
 }
 
 fn run_gui(cli: Cli) -> Result<()> {
-    // Check if another instance is running and send IPC message if so
     let sent_ipc = check_single_instance(&cli)?;
     if sent_ipc {
         crate::log!("Sent reload message to existing instance");
         return Ok(());
     }
 
-    // Start IPC listener
     let ipc_rx = ipc::start_listener()?;
 
     let start = Instant::now();
@@ -205,6 +199,19 @@ fn run_gui(cli: Cli) -> Result<()> {
             Err(e) => {
                 eprintln!("Warning: Failed to load commands config: {}", e);
             }
+        }
+    }
+
+    if cli.nixpkgs {
+        if let Some(nixpkgs) = load_binary_source("nixpkgs.bin")? {
+            let count = nixpkgs.len();
+            for pkg in nixpkgs {
+                elements.add(pkg);
+            }
+            crate::log!("Loaded {} nixpkgs packages from nixpkgs.bin", count);
+        } else {
+            eprintln!("Warning: --nixpkgs specified but nixpkgs.bin not found");
+            eprintln!("Run: frisk daemon nixpkgs");
         }
     }
 

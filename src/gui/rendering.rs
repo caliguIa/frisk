@@ -15,7 +15,6 @@ pub fn draw_text(text: &str, x: f64, y: f64, color: &Retained<NSColor>, font: &R
             static NSFontAttributeName: &'static AnyObject;
         }
 
-        // Create opaque version of the color
         let opaque_color: Retained<NSColor> = msg_send![
             color,
             colorWithAlphaComponent: 1.0

@@ -54,6 +54,14 @@ impl Element {
             element_type: ElementType::HomebrewPackage,
         }
     }
+
+    pub fn new_nix_package(name: String, attr_name: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: attr_name.into_boxed_str(),
+            element_type: ElementType::NixPackage,
+        }
+    }
 }
 
 pub struct ElementList {

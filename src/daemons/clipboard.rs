@@ -41,10 +41,7 @@ pub fn run() -> Result<()> {
                     if let Err(e) = save_clipboard_history(&history) {
                         eprintln!("[clipboard daemon] Failed to save: {}", e);
                     } else {
-                        eprintln!(
-                            "[clipboard daemon] Saved entry ({} total)",
-                            history.len()
-                        );
+                        eprintln!("[clipboard daemon] Saved entry ({} total)", history.len());
                     }
                 }
             }
@@ -65,21 +62,21 @@ fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
                 .split_whitespace()
                 .collect::<Vec<_>>()
                 .join(" ");
-            
+
             if normalized.is_empty() {
                 return None;
             }
-            
+
             let display = if normalized.len() > 80 {
                 format!("{}...", &normalized[..77])
             } else {
                 normalized.clone()
             };
-            
+
             Some(Element::new_clipboard_entry(display, content.clone()))
         })
         .collect();
-    
+
     crate::cache::save_cache("clipboard.bin", &elements)?;
     Ok(())
 }

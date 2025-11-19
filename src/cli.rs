@@ -36,6 +36,10 @@ pub struct Cli {
     /// Load custom commands from config
     #[arg(long)]
     pub commands: bool,
+
+    /// Enable nixpkgs search (requires daemon)
+    #[arg(long)]
+    pub nixpkgs: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -54,40 +58,20 @@ pub enum Commands {
 
 #[derive(Subcommand, Debug)]
 pub enum ServiceCommands {
-    /// Install a LaunchAgent service
-    Install {
-        /// Service name: apps, homebrew, clipboard, or all
-        name: String,
-    },
-    /// Uninstall a LaunchAgent service
-    Uninstall {
-        /// Service name: apps, homebrew, clipboard, or all
-        name: String,
-    },
-    /// Start a LaunchAgent service
-    Start {
-        /// Service name: apps, homebrew, clipboard, or all
-        name: String,
-    },
-    /// Stop a LaunchAgent service
-    Stop {
-        /// Service name: apps, homebrew, clipboard, or all
-        name: String,
-    },
-    /// Show status of all services
+    Install { name: String },
+    Uninstall { name: String },
+    Start { name: String },
+    Stop { name: String },
     Status,
-    /// List available services
     List,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum DaemonCommands {
-    /// Watch application directories and update apps.bin
     Apps,
-    /// Fetch homebrew packages and update homebrew.bin
     Homebrew,
-    /// Monitor clipboard and update clipboard.bin
     Clipboard,
+    Nixpkgs,
 }
 
 pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {

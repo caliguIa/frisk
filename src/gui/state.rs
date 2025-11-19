@@ -130,7 +130,6 @@ impl AppState {
     }
 
     pub fn execute_selected(&mut self) -> Result<()> {
-        // Check if calculator result is selected (index 0 when it exists)
         if self.selected_index == 0 && self.calculator_result.is_some() {
             if let Some(calc_result) = &self.calculator_result {
                 crate::log!("Copying calculator result: {}", calc_result.value);
@@ -144,7 +143,6 @@ impl AppState {
                 }
             }
         } else {
-            // Adjust index if calculator result exists
             let app_idx = if self.calculator_result.is_some() {
                 self.selected_index - 1
             } else {
@@ -164,7 +162,6 @@ impl AppState {
                             self.should_exit = true;
                         }
                         ElementType::CalculatorResult => {
-                            // This shouldn't happen anymore but keep for safety
                             crate::log!("Copying: {}", element.value);
                             let pasteboard = NSPasteboard::generalPasteboard();
                             pasteboard.clearContents();
@@ -181,7 +178,6 @@ impl AppState {
                             crate::log!("Executing system command: {}", element.name);
                             let command = element.value.as_ref();
 
-                            // Check if this is a frisk command - if so, reload in place instead of spawning
                             if command.trim().starts_with("frisk ") || command.trim() == "frisk" {
                                 // Parse frisk arguments and reload current instance
                                 let args: Vec<&str> = command.split_whitespace().skip(1).collect();
@@ -190,7 +186,7 @@ impl AppState {
                                 let mut clipboard = false;
                                 let mut commands = false;
                                 let sources = vec![];
-                                
+
                                 for arg in args {
                                     match arg {
                                         "--apps" => apps = true,
@@ -200,12 +196,11 @@ impl AppState {
                                         _ => {}
                                     }
                                 }
-                                
+
                                 self.handle_reload(apps, homebrew, clipboard, commands, sources);
                                 return Ok(());
                             }
 
-                            // Execute the command normally
                             Command::new("sh")
                                 .arg("-c")
                                 .arg(command)
@@ -214,7 +209,6 @@ impl AppState {
                             self.should_exit = true;
                         }
                         ElementType::ClipboardHistory => {
-                            // Copy to clipboard (don't add back to history - it's already there)
                             crate::log!("Copying clipboard history entry: {}", element.value);
                             let pasteboard = NSPasteboard::generalPasteboard();
                             pasteboard.clearContents();
@@ -228,7 +222,6 @@ impl AppState {
                             }
                         }
                         ElementType::NixPackage => {
-                            // Copy package name to clipboard
                             crate::log!("Copying nixpkg name: {}", element.value);
                             let pasteboard = NSPasteboard::generalPasteboard();
                             pasteboard.clearContents();
@@ -242,7 +235,6 @@ impl AppState {
                             }
                         }
                         ElementType::RustCrate => {
-                            // Open crate URL in browser
                             crate::log!("Opening crate URL: {}", element.value);
                             Command::new("open")
                                 .arg(element.value.as_ref())
@@ -251,7 +243,6 @@ impl AppState {
                             self.should_exit = true;
                         }
                         ElementType::HomebrewPackage => {
-                            // Open homebrew package URL in browser
                             crate::log!("Opening homebrew URL: {}", element.value);
                             Command::new("open")
                                 .arg(element.value.as_ref())
@@ -377,12 +368,25 @@ impl AppState {
         }
     }
 
-    pub fn handle_reload(&mut self, apps: bool, homebrew: bool, clipboard: bool, commands: bool, sources: Vec<String>) {
-        crate::log!("Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, sources={:?}",
-            apps, homebrew, clipboard, commands, sources);
-        
+    pub fn handle_reload(
+        &mut self,
+        apps: bool,
+        homebrew: bool,
+        clipboard: bool,
+        commands: bool,
+        sources: Vec<String>,
+    ) {
+        crate::log!(
+            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, sources={:?}",
+            apps,
+            homebrew,
+            clipboard,
+            commands,
+            sources
+        );
+
         let mut new_elements = crate::element::ElementList::new();
-        
+
         if apps {
             if let Ok(Some(app_list)) = crate::loader::load_binary_source("apps.bin") {
                 for app in app_list {
@@ -390,7 +394,7 @@ impl AppState {
                 }
             }
         }
-        
+
         if homebrew {
             if let Ok(Some(brew_list)) = crate::loader::load_binary_source("homebrew.bin") {
                 for item in brew_list {
@@ -398,7 +402,7 @@ impl AppState {
                 }
             }
         }
-        
+
         if clipboard {
             if let Ok(Some(clip_list)) = crate::loader::load_binary_source("clipboard.bin") {
                 for item in clip_list {
@@ -406,15 +410,17 @@ impl AppState {
                 }
             }
         }
-        
+
         for source_path in sources {
-            if let Ok(items) = crate::loader::load_binary_file(&std::path::PathBuf::from(source_path)) {
+            if let Ok(items) =
+                crate::loader::load_binary_file(&std::path::PathBuf::from(source_path))
+            {
                 for item in items {
                     new_elements.add(item);
                 }
             }
         }
-        
+
         if commands {
             if let Ok(commands_config) = crate::commands::CommandsConfig::load() {
                 for cmd in commands_config.to_elements() {
@@ -422,10 +428,8 @@ impl AppState {
                 }
             }
         }
-        
+
         self.elements = new_elements;
-        self.query.clear();
-        self.cursor_position = 0;
         self.update_search();
         crate::log!("Reloaded {} elements", self.elements.len());
     }

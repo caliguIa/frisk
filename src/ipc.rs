@@ -7,10 +7,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-/// Messages that can be sent between frisk instances
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum IpcMessage {
-    /// Reload the UI with new sources
     Reload {
         apps: bool,
         homebrew: bool,
@@ -18,24 +16,25 @@ pub enum IpcMessage {
         commands: bool,
         sources: Vec<String>,
     },
+    Search {
+        query: String,
+        source: SearchSource,
+    },
 }
 
-/// Get the path to the IPC socket
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SearchSource {
+    Nixpkgs,
+}
+
 pub fn socket_path() -> Result<PathBuf> {
-    let runtime_dir = if let Ok(dir) = std::env::var("TMPDIR") {
-        PathBuf::from(dir)
-    } else {
-        PathBuf::from("/tmp")
-    };
+    let runtime_dir = PathBuf::from("/tmp");
     Ok(runtime_dir.join("frisk.sock"))
 }
 
-/// Start listening for IPC messages in a background thread
-/// Returns a receiver that will get messages from other instances
 pub fn start_listener() -> Result<Receiver<IpcMessage>> {
     let socket_path = socket_path()?;
 
-    // Remove old socket if it exists
     if socket_path.exists() {
         fs::remove_file(&socket_path)?;
     }
@@ -64,7 +63,6 @@ pub fn start_listener() -> Result<Receiver<IpcMessage>> {
     Ok(rx)
 }
 
-/// Handle an incoming IPC connection
 fn handle_connection(stream: UnixStream, tx: Sender<IpcMessage>) -> Result<()> {
     let reader = BufReader::new(stream);
     for line in reader.lines() {
@@ -86,17 +84,16 @@ fn handle_connection(stream: UnixStream, tx: Sender<IpcMessage>) -> Result<()> {
     Ok(())
 }
 
-/// Send a message to the running frisk instance
 pub fn send_message(msg: &IpcMessage) -> Result<()> {
-    let socket_path = socket_path()?;
+    send_message_to_socket(&socket_path()?, msg)
+}
 
+fn send_message_to_socket(socket_path: &PathBuf, msg: &IpcMessage) -> Result<()> {
     if !socket_path.exists() {
-        return Err(Error::new(
-            "No running frisk instance found (socket doesn't exist)",
-        ));
+        return Err(Error::new("Socket doesn't exist"));
     }
 
-    let mut stream = UnixStream::connect(&socket_path)
+    let mut stream = UnixStream::connect(socket_path)
         .map_err(|e| Error::new(format!("Failed to connect to IPC socket: {}", e)))?;
 
     let json = serde_json::to_string(msg)?;
@@ -108,7 +105,6 @@ pub fn send_message(msg: &IpcMessage) -> Result<()> {
     Ok(())
 }
 
-/// Clean up the IPC socket on exit
 pub fn cleanup() {
     if let Ok(socket_path) = socket_path() {
         let _ = fs::remove_file(socket_path);

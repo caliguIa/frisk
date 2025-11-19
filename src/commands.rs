@@ -22,7 +22,6 @@ impl CommandsConfig {
         let path = Self::config_path()?;
 
         if !path.exists() {
-            // Create default config
             let default_config = Self::default_config();
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;

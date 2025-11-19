@@ -63,7 +63,9 @@ impl Config {
             None => PathBuf::from(
                 std::env::var("XDG_CONFIG_HOME")
                     .or_else(|_| std::env::var("HOME").map(|home| format!("{}/.cache", home)))
-                    .map_err(|_| Error::new("Neither $XDG_CONFIG_HOME or $HOME variables are set."))?,
+                    .map_err(|_| {
+                        Error::new("Neither $XDG_CONFIG_HOME or $HOME variables are set.")
+                    })?,
             )
             .join("frisk")
             .join("config.toml"),

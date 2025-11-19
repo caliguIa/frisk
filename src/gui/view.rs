@@ -33,7 +33,6 @@ define_class!(
     impl CustomView {
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty_rect: NSRect) {
-            // Check for IPC messages
             if let Some(rx) = self.ivars().ipc_rx.borrow().as_ref() {
                 if let Ok(msg) = rx.try_recv() {
                     self.handle_ipc_message(msg);
@@ -74,7 +73,6 @@ define_class!(
 
             let mut display_idx = 0;
 
-            // Draw calculator result first if it exists
             if let Some(calc_result) = &state.calculator_result {
                 if display_idx >= state.scroll_offset && display_idx < state.scroll_offset + state.dynamic_max_results {
                     let y = results_start_y - ((display_idx - state.scroll_offset) as f64 * line_height);
@@ -95,7 +93,6 @@ define_class!(
                 display_idx += 1;
             }
 
-            // Draw app results
             for &elem_idx in &state.filtered_indices {
                 if display_idx >= state.scroll_offset && display_idx < state.scroll_offset + state.dynamic_max_results {
                     if let Some(element) = state.elements.inner.get(elem_idx) {
@@ -154,7 +151,6 @@ define_class!(
 
             crate::log!("Key: code={}, ctrl={}, cmd={}", key_code, ctrl, cmd);
 
-            // Handle Ctrl+letter combinations using charactersIgnoringModifiers
             if ctrl && !cmd {
                 if let Some(characters) = event.charactersIgnoringModifiers() {
                     let text = characters.to_string();
@@ -196,7 +192,6 @@ define_class!(
                 }
             }
 
-            // Handle Cmd+V for paste
             if cmd && !ctrl {
                 if let Some(characters) = event.charactersIgnoringModifiers() {
                     if characters.to_string().to_lowercase() == "v" {
@@ -319,6 +314,7 @@ impl CustomView {
                 let mut state = self.ivars().state.borrow_mut();
                 state.handle_reload(apps, homebrew, clipboard, commands, sources);
             }
+            IpcMessage::Search { .. } => {}
         }
     }
 }
