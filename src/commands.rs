@@ -43,13 +43,13 @@ impl CommandsConfig {
             PathBuf::from(".")
         };
         path.push(".config");
-        path.push("kickoff-macos");
+        path.push("frisk");
         path.push("commands.toml");
         Ok(path)
     }
 
     fn default_config() -> String {
-        r#"# Custom commands for kickoff
+        r#"# Custom commands for frisk
 # Add your own commands here
 
 [[command]]

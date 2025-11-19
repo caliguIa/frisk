@@ -10,7 +10,7 @@ pub fn cache_dir() -> Result<PathBuf> {
             .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
             .map_err(|_| crate::error::Error::new("Could not determine cache directory"))?,
     )
-    .join("kickoff");
+    .join("frisk");
 
     fs::create_dir_all(&dir)?;
     Ok(dir)

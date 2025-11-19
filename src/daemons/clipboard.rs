@@ -23,12 +23,11 @@ pub fn run() -> Result<()> {
         if current_count != last_change_count {
             last_change_count = current_count;
 
-            // Try to get string content
             if let Some(content) = pasteboard.stringForType(unsafe { NSPasteboardTypeString }) {
                 let content_str = content.to_string();
+                let trimmed = content_str.trim();
 
-                // Skip if empty or same as last entry
-                if !content_str.is_empty()
+                if !trimmed.is_empty()
                     && history.front().map(|e| e == &content_str).unwrap_or(false) == false
                 {
                     history.push_front(content_str.clone());
@@ -56,11 +55,9 @@ pub fn run() -> Result<()> {
 }
 
 fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
-    // Convert to Elements before saving
     let elements: Vec<Element> = history
         .iter()
-        .map(|content| {
-            // Normalize whitespace: replace newlines, tabs, and multiple spaces with single space
+        .filter_map(|content| {
             let normalized: String = content
                 .chars()
                 .map(|c| if c.is_whitespace() { ' ' } else { c })
@@ -69,15 +66,17 @@ fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
                 .collect::<Vec<_>>()
                 .join(" ");
             
-            // Truncate long content for display
+            if normalized.is_empty() {
+                return None;
+            }
+            
             let display = if normalized.len() > 80 {
                 format!("{}...", &normalized[..77])
             } else {
                 normalized.clone()
             };
             
-            // Use original content as value so paste preserves formatting
-            Element::new_clipboard_entry(display, content.clone())
+            Some(Element::new_clipboard_entry(display, content.clone()))
         })
         .collect();
     

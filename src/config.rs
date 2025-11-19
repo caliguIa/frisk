@@ -65,7 +65,7 @@ impl Config {
                     .or_else(|_| std::env::var("HOME").map(|home| format!("{}/.cache", home)))
                     .map_err(|_| Error::new("Neither $XDG_CONFIG_HOME or $HOME variables are set."))?,
             )
-            .join("kickoff")
+            .join("frisk")
             .join("config.toml"),
         };
 

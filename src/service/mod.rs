@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
-const SERVICE_PREFIX: &str = "com.kickoff";
+const SERVICE_PREFIX: &str = "io.calrichards.frisk";
 
 pub struct Service {
     name: String,
@@ -35,7 +35,7 @@ impl Service {
     fn log_path(&self, kind: &str) -> PathBuf {
         let home = env::var("HOME").expect("HOME not set");
         PathBuf::from(format!(
-            "{}/Library/Logs/kickoff-{}.{}",
+            "{}/Library/Logs/frisk-{}.{}",
             home, &self.name, kind
         ))
     }
@@ -257,7 +257,7 @@ pub fn handle_service_command(cmd: ServiceCommands) -> Result<()> {
 }
 
 fn show_status() -> Result<()> {
-    println!("Kickoff Services Status:");
+    println!("Frisk Services Status:");
     println!();
 
     let all_services = vec!["apps", "homebrew", "clipboard"];

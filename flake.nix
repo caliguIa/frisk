@@ -41,10 +41,10 @@
             description = cargoToml.package.description;
             license = licenses.gpl3Plus;
             platforms = platforms.darwin;
-            mainProgram = "kickoff";
+            mainProgram = "frisk";
           };
         };
-        kickoff = self.packages.${system}.default;
+        frisk = self.packages.${system}.default;
       }
     );
     devShells = forAllSystems (
@@ -66,7 +66,7 @@
           RUST_BACKTRACE = "1";
           RUST_LOG = "info";
           shellHook = ''
-            echo "🚀 Kickoff macOS Development Environment"
+            echo "🚀 Frisk macOS Development Environment"
             echo "================================================"
             echo "Rust:    $(rustc --version)"
             echo "Cargo:   $(cargo --version)"
@@ -85,8 +85,8 @@
             echo "  nix run                  - Run the launcher"
             echo ""
             echo "Binary locations:"
-            echo "  Debug:   target/debug/kickoff"
-            echo "  Release: target/release/kickoff"
+            echo "  Debug:   target/debug/frisk"
+            echo "  Release: target/release/frisk"
             echo "================================================"
           '';
         };
@@ -95,9 +95,9 @@
     apps = forAllSystems (system: {
       default = {
         type = "app";
-        program = "${self.packages.${system}.default}/bin/kickoff";
+        program = "${self.packages.${system}.default}/bin/frisk";
       };
-      kickoff = self.apps.${system}.default;
+      frisk = self.apps.${system}.default;
     });
     formatter = forAllSystems (system: nixpkgsFor.${system}.nixpkgs-fmt);
   };

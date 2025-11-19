@@ -26,7 +26,7 @@ struct CaskInfo {
 fn fetch_homebrew() -> Result<Vec<Element>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("kickoff/0.1.0")
+        .user_agent("frisk/0.1.0")
         .build()?;
 
     let mut elements = Vec::new();

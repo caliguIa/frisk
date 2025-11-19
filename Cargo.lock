@@ -299,6 +299,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "frisk"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "block2",
+ "clap",
+ "evalexpr",
+ "notify",
+ "notify-debouncer-full",
+ "nucleo-matcher",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-quartz-core",
+ "reqwest",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "fsevent-sys"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -699,26 +719,6 @@ checksum = "b011eec8cc36da2aab2d5cff675ec18454fad408585853910a202391cf9f8e65"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kickoff-darwin"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "block2",
- "clap",
- "evalexpr",
- "notify",
- "notify-debouncer-full",
- "nucleo-matcher",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-quartz-core",
- "reqwest",
- "serde",
- "toml",
 ]
 
 [[package]]

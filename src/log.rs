@@ -2,7 +2,7 @@
 macro_rules! log {
     ($($arg:tt)*) => {{
         if cfg!(debug_assertions) {
-            eprintln!("[kickoff] {}", format!($($arg)*));
+            eprintln!("[frisk] {}", format!($($arg)*));
         }
     }};
 }

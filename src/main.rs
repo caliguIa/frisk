@@ -59,11 +59,12 @@ fn check_single_instance() -> Result<()> {
                 let status = std::process::Command::new("kill")
                     .arg("-0")
                     .arg(pid.to_string())
+                    .stderr(std::process::Stdio::null())
                     .status();
 
                 if status.is_ok() && status.unwrap().success() {
                     return Err(error::Error::new(
-                        "Another instance of kickoff is already running",
+                        "Another instance of frisk is already running",
                     ));
                 }
             }
@@ -91,7 +92,7 @@ fn get_lock_file_path() -> Result<PathBuf> {
     } else {
         PathBuf::from("/tmp")
     };
-    Ok(runtime_dir.join("kickoff.lock"))
+    Ok(runtime_dir.join("frisk.lock"))
 }
 
 fn run_gui(cli: Cli) -> Result<()> {
@@ -126,7 +127,7 @@ fn run_gui(cli: Cli) -> Result<()> {
             crate::log!("Loaded {} apps from apps.bin", count);
         } else {
             eprintln!("Warning: --apps specified but apps.bin not found");
-            eprintln!("Run: kickoff service install apps && kickoff service start apps");
+            eprintln!("Run: frisk service install apps && frisk service start apps");
         }
     }
 
@@ -139,7 +140,7 @@ fn run_gui(cli: Cli) -> Result<()> {
             crate::log!("Loaded {} homebrew packages from homebrew.bin", count);
         } else {
             eprintln!("Warning: --homebrew specified but homebrew.bin not found");
-            eprintln!("Run: kickoff service install homebrew && kickoff service start homebrew");
+            eprintln!("Run: frisk service install homebrew && frisk service start homebrew");
         }
     }
 
@@ -152,7 +153,7 @@ fn run_gui(cli: Cli) -> Result<()> {
             crate::log!("Loaded {} clipboard items from clipboard.bin", count);
         } else {
             eprintln!("Warning: --clipboard specified but clipboard.bin not found");
-            eprintln!("Run: kickoff service install clipboard && kickoff service start clipboard");
+            eprintln!("Run: frisk service install clipboard && frisk service start clipboard");
         }
     }
 
