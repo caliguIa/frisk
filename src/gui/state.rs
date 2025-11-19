@@ -6,16 +6,6 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
 use std::process::Command;
-use std::time::{Duration, Instant};
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AppMode {
-    Normal,           // Regular app launcher
-    ClipboardHistory, // Clipboard history browser
-    NixpkgsSearch,    // Nixpkgs package search
-    CratesSearch,     // Crates.io search
-    HomebrewSearch,   // Homebrew formulae/cask search
-}
 
 pub struct AppState {
     pub config: Config,
@@ -28,15 +18,10 @@ pub struct AppState {
     pub should_exit: bool,
     pub dynamic_max_results: usize,
     pub menubar_height: f64,
-    pub mode: AppMode,
     calculator: Option<Calculator>,
     pub calculator_result: Option<Element>,
     pub prompt_query_cache: String,
     pub cursor_text_cache: String,
-    // Debouncing for nixpkgs search
-    last_query_time: Instant,
-    pub last_search_query: String,
-    pub is_searching: bool,
 }
 
 impl AppState {
@@ -60,14 +45,10 @@ impl AppState {
             should_exit: false,
             dynamic_max_results: max_results,
             menubar_height,
-            mode: AppMode::Normal,
             calculator: None,
             calculator_result: None,
             prompt_query_cache: String::with_capacity(64),
             cursor_text_cache: String::with_capacity(64),
-            last_query_time: Instant::now(),
-            last_search_query: String::new(),
-            is_searching: false,
         };
         state.update_search();
         state
@@ -91,138 +72,29 @@ impl AppState {
     }
 
     pub fn update_search(&mut self) {
-        match self.mode {
-            AppMode::Normal => {
-                // Normal app search with calculator
-                let indices = self.elements.search(&self.query);
+        // Normal fuzzy search with calculator
+        let indices = self.elements.search(&self.query);
 
-                if self.calculator.is_none() && !self.query.is_empty() {
-                    self.calculator = Calculator::new().ok();
+        if self.calculator.is_none() && !self.query.is_empty() {
+            self.calculator = Calculator::new().ok();
+        }
+
+        self.calculator_result = None;
+        if let Some(calc) = &mut self.calculator {
+            if !self.query.is_empty() {
+                if let Some(result) = calc.evaluate(&self.query) {
+                    self.calculator_result = Some(Element {
+                        name: result.clone().into_boxed_str(),
+                        value: result.into_boxed_str(),
+                        element_type: crate::element::ElementType::CalculatorResult,
+                    });
                 }
-
-                self.calculator_result = None;
-                if let Some(calc) = &mut self.calculator {
-                    if !self.query.is_empty() {
-                        if let Some(result) = calc.evaluate(&self.query) {
-                            self.calculator_result = Some(Element {
-                                name: result.clone().into_boxed_str(),
-                                value: result.into_boxed_str(),
-                                element_type: crate::element::ElementType::CalculatorResult,
-                            });
-                        }
-                    }
-                }
-
-                self.filtered_indices = indices;
-            }
-            AppMode::NixpkgsSearch => {
-                // Mark the time of query change for debouncing
-                self.last_query_time = Instant::now();
-
-                if self.query.is_empty() {
-                    self.filtered_indices = Vec::new();
-                    self.calculator_result = None;
-                    self.is_searching = false;
-                } else {
-                    // Don't search immediately - will be triggered by check_debounced_search
-                    self.is_searching = true;
-                }
-            }
-            AppMode::CratesSearch => {
-                // Mark the time of query change for debouncing
-                self.last_query_time = Instant::now();
-
-                if self.query.is_empty() {
-                    self.filtered_indices = Vec::new();
-                    self.calculator_result = None;
-                    self.is_searching = false;
-                } else {
-                    // Don't search immediately - will be triggered by check_debounced_search
-                    self.is_searching = true;
-                }
-            }
-            AppMode::HomebrewSearch => {
-                // Mark the time of query change for debouncing
-                self.last_query_time = Instant::now();
-
-                if self.query.is_empty() {
-                    self.filtered_indices = Vec::new();
-                    self.calculator_result = None;
-                    self.is_searching = false;
-                } else {
-                    // Don't search immediately - will be triggered by check_debounced_search
-                    self.is_searching = true;
-                }
-            }
-            AppMode::ClipboardHistory => {
-                // Just do normal fuzzy search through clipboard history
-                let indices = self.elements.search(&self.query);
-                self.filtered_indices = indices;
-                self.calculator_result = None;
             }
         }
 
+        self.filtered_indices = indices;
         self.selected_index = 0;
         self.scroll_offset = 0;
-    }
-
-    /// Check if enough time has passed to perform API search (nixpkgs, crates, or homebrew)
-    /// Returns true if search was performed
-    pub fn check_debounced_search(&mut self) -> bool {
-        const DEBOUNCE_MS: u64 = 300;
-
-        if !matches!(self.mode, AppMode::NixpkgsSearch | AppMode::CratesSearch | AppMode::HomebrewSearch) || !self.is_searching {
-            return false;
-        }
-
-        // Check if debounce period has elapsed
-        let elapsed = self.last_query_time.elapsed();
-        if elapsed < Duration::from_millis(DEBOUNCE_MS) {
-            return false;
-        }
-
-        // Check if query changed since last search
-        if self.query == self.last_search_query {
-            self.is_searching = false;
-            return false;
-        }
-
-        // Perform the search based on mode
-        let search_result: Result<ElementList> = match self.mode {
-            AppMode::NixpkgsSearch => {
-                crate::log!("Performing debounced nixpkgs search for: {}", self.query);
-                // Nixpkgs search removed - use --nixpkgs flag to load nixpkgs.bin
-                Ok(ElementList::new())
-            }
-            AppMode::CratesSearch => {
-                crate::log!("Performing debounced crates search for: {}", self.query);
-                // Crates search removed - functionality moved to external services
-                Ok(ElementList::new())
-            }
-            AppMode::HomebrewSearch => {
-                crate::log!("Performing debounced homebrew search for: {}", self.query);
-                // Homebrew search removed - use --homebrew flag to load homebrew.bin
-                Ok(ElementList::new())
-            }
-            _ => return false,
-        };
-
-        match search_result {
-            Ok(results) => {
-                self.elements = results;
-                self.filtered_indices = (0..self.elements.len()).collect();
-                self.calculator_result = None;
-                self.last_search_query = self.query.clone();
-                self.is_searching = false;
-                crate::log!("Found {} results", self.elements.len());
-                true
-            }
-            Err(e) => {
-                crate::log!("Search failed: {}", e);
-                self.is_searching = false;
-                false
-            }
-        }
     }
 
     pub fn update_string_caches(&mut self) {
@@ -300,7 +172,6 @@ impl AppState {
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
-                                // Clipboard history tracked by daemon automatically
                                 self.should_exit = true;
                             } else {
                                 return Err(Error::new("Failed to copy"));
@@ -310,43 +181,13 @@ impl AppState {
                             crate::log!("Executing system command: {}", element.name);
                             let command = element.value.as_ref();
 
-                            // Check for special commands that switch modes
-                            if command == "__clipboard_history__" {
-                                // Clipboard history is now loaded via --clipboard flag
-                                crate::log!("Use --clipboard flag to load clipboard history");
-                            } else if command == "__nixpkgs__" {
-                                // Switch to nixpkgs mode - start with empty list
-                                crate::log!("Switching to nixpkgs search mode");
-                                self.elements = ElementList::new();
-                                self.mode = AppMode::NixpkgsSearch;
-                                self.query.clear();
-                                self.cursor_position = 0;
-                                self.update_search();
-                            } else if command == "__crates__" {
-                                // Switch to crates mode - start with empty list
-                                crate::log!("Switching to crates search mode");
-                                self.elements = ElementList::new();
-                                self.mode = AppMode::CratesSearch;
-                                self.query.clear();
-                                self.cursor_position = 0;
-                                self.update_search();
-                            } else if command == "__homebrew__" {
-                                // Switch to homebrew mode - start with empty list
-                                crate::log!("Switching to homebrew search mode");
-                                self.elements = ElementList::new();
-                                self.mode = AppMode::HomebrewSearch;
-                                self.query.clear();
-                                self.cursor_position = 0;
-                                self.update_search();
-                            } else {
-                                // Execute the command
-                                Command::new("sh")
-                                    .arg("-c")
-                                    .arg(command)
-                                    .spawn()
-                                    .map_err(|e| Error::new(format!("Failed to execute: {}", e)))?;
-                                self.should_exit = true;
-                            }
+                            // Execute the command
+                            Command::new("sh")
+                                .arg("-c")
+                                .arg(command)
+                                .spawn()
+                                .map_err(|e| Error::new(format!("Failed to execute: {}", e)))?;
+                            self.should_exit = true;
                         }
                         ElementType::ClipboardHistory => {
                             // Copy to clipboard (don't add back to history - it's already there)
@@ -371,7 +212,6 @@ impl AppState {
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
-                                // Clipboard history tracked by daemon automatically
                                 self.should_exit = true;
                             } else {
                                 return Err(Error::new("Failed to copy"));

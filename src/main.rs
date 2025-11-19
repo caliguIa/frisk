@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::PathBuf;
 use std::time::Instant;
 
 mod cache;
@@ -35,14 +37,59 @@ fn main() -> Result<()> {
                 DaemonCommands::Apps => daemons::apps::run(),
                 DaemonCommands::Homebrew => daemons::homebrew::run(),
                 DaemonCommands::Clipboard => daemons::clipboard::run(),
-                DaemonCommands::Nixpkgs { force } => daemons::nixpkgs::run(force),
             }
         }
         None => run_gui(cli),
     }
 }
 
+/// Check if another instance is already running
+fn check_single_instance() -> Result<()> {
+    let lock_file = get_lock_file_path()?;
+
+    // Check if lock file exists and process is still running
+    if lock_file.exists() {
+        if let Ok(pid_str) = fs::read_to_string(&lock_file) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                // Check if process is still running using kill -0
+                let status = std::process::Command::new("kill")
+                    .arg("-0")
+                    .arg(pid.to_string())
+                    .status();
+
+                if status.is_ok() && status.unwrap().success() {
+                    // Process is still running
+                    return Err(error::Error::new(
+                        "Another instance of kickoff is already running",
+                    ));
+                }
+            }
+        }
+        // Old lock file from crashed process, remove it
+        let _ = fs::remove_file(&lock_file);
+    }
+
+    // Write our PID to lock file
+    let pid = std::process::id();
+    fs::write(&lock_file, pid.to_string())?;
+
+    Ok(())
+}
+
+/// Get path to lock file
+fn get_lock_file_path() -> Result<PathBuf> {
+    let runtime_dir = if let Ok(dir) = std::env::var("TMPDIR") {
+        PathBuf::from(dir)
+    } else {
+        PathBuf::from("/tmp")
+    };
+    Ok(runtime_dir.join("kickoff.lock"))
+}
+
 fn run_gui(cli: Cli) -> Result<()> {
+    // Ensure only one instance is running
+    check_single_instance()?;
+
     let start = Instant::now();
 
     let config = if let Some(config_path) = cli.config {
@@ -123,16 +170,18 @@ fn run_gui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Load custom commands from config
-    match commands::CommandsConfig::load() {
-        Ok(commands_config) => {
-            for cmd in commands_config.to_elements() {
-                elements.add(cmd);
+    // Load custom commands from config (only if --commands flag is set)
+    if cli.commands {
+        match commands::CommandsConfig::load() {
+            Ok(commands_config) => {
+                for cmd in commands_config.to_elements() {
+                    elements.add(cmd);
+                }
+                crate::log!("Loaded {} custom commands", commands_config.command.len());
             }
-            crate::log!("Loaded {} custom commands", commands_config.command.len());
-        }
-        Err(e) => {
-            eprintln!("Warning: Failed to load commands config: {}", e);
+            Err(e) => {
+                eprintln!("Warning: Failed to load commands config: {}", e);
+            }
         }
     }
 
@@ -159,6 +208,11 @@ fn run_gui(cli: Cli) -> Result<()> {
     );
 
     gui::run(config, elements)?;
+
+    // Clean up lock file on normal exit
+    if let Ok(lock_file) = get_lock_file_path() {
+        let _ = fs::remove_file(lock_file);
+    }
 
     Ok(())
 }

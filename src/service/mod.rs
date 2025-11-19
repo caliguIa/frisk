@@ -152,7 +152,6 @@ impl Service {
             "apps" => vec!["daemon".to_string(), "apps".to_string()],
             "homebrew" => vec!["daemon".to_string(), "homebrew".to_string()],
             "clipboard" => vec!["daemon".to_string(), "clipboard".to_string()],
-            "nixpkgs" => vec!["daemon".to_string(), "nixpkgs".to_string()],
             _ => unreachable!("Invalid service name: {}", self.name),
         };
 
@@ -163,7 +162,7 @@ impl Service {
             .join("\n");
 
         let keep_alive = matches!(self.name.as_str(), "apps" | "clipboard");
-        let start_interval = matches!(self.name.as_str(), "homebrew" | "nixpkgs").then_some(3600);
+        let start_interval = (self.name.as_str() == "homebrew").then_some(3600);
 
         let mut plist = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -261,7 +260,7 @@ fn show_status() -> Result<()> {
     println!("Kickoff Services Status:");
     println!();
 
-    let all_services = vec!["apps", "homebrew", "clipboard", "nixpkgs"];
+    let all_services = vec!["apps", "homebrew", "clipboard"];
     
     for service_name in all_services {
         let service = Service::new(service_name.to_string())?;
@@ -304,7 +303,6 @@ fn list_services() {
     println!("  apps       - Watch application directories for changes");
     println!("  homebrew   - Fetch homebrew packages hourly");
     println!("  clipboard  - Monitor clipboard for history");
-    println!("  nixpkgs    - Fetch nixpkgs hourly");
     println!();
     println!("Use 'all' to operate on all services at once");
 }

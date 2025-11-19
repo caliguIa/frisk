@@ -3,17 +3,10 @@ use crate::error::Result;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use std::collections::VecDeque;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-const MAX_HISTORY: usize = 100;
+const MAX_HISTORY: usize = 1000;
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
-
-/// Clipboard history entry
-#[derive(Clone, bincode::Encode, bincode::Decode)]
-struct ClipboardEntry {
-    content: String,
-    timestamp: u64, // Unix timestamp
-}
 
 /// Monitor clipboard and save history
 pub fn run() -> Result<()> {
@@ -21,16 +14,7 @@ pub fn run() -> Result<()> {
 
     let pasteboard = NSPasteboard::generalPasteboard();
     let mut last_change_count = pasteboard.changeCount();
-    let mut history: VecDeque<ClipboardEntry> = VecDeque::new();
-
-    // Load existing history if available
-    if let Some(existing) = load_clipboard_history()? {
-        history = existing;
-        eprintln!(
-            "[clipboard daemon] Loaded {} existing entries",
-            history.len()
-        );
-    }
+    let mut history: VecDeque<String> = VecDeque::new();
 
     eprintln!("[clipboard daemon] Monitoring clipboard...");
 
@@ -46,22 +30,9 @@ pub fn run() -> Result<()> {
 
                 // Skip if empty or same as last entry
                 if !content_str.is_empty()
-                    && !history
-                        .front()
-                        .map(|e| e.content == content_str)
-                        .unwrap_or(false)
+                    && history.front().map(|e| e == &content_str).unwrap_or(false) == false
                 {
-                    let timestamp = SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs();
-
-                    let entry = ClipboardEntry {
-                        content: content_str.clone(),
-                        timestamp,
-                    };
-
-                    history.push_front(entry);
+                    history.push_front(content_str.clone());
 
                     // Trim to max size
                     while history.len() > MAX_HISTORY {
@@ -85,42 +56,33 @@ pub fn run() -> Result<()> {
     }
 }
 
-/// Load clipboard history from binary cache
-fn load_clipboard_history() -> Result<Option<VecDeque<ClipboardEntry>>> {
-    let cache_path = crate::cache::cache_dir()?.join("clipboard.bin");
-
-    if !cache_path.exists() {
-        return Ok(None);
-    }
-
-    let bytes = std::fs::read(&cache_path)?;
-    let config = bincode::config::standard();
-    let (entries, _): (Vec<ClipboardEntry>, usize) =
-        bincode::decode_from_slice(&bytes, config)?;
-
-    Ok(Some(entries.into_iter().collect()))
-}
-
-/// Save clipboard history to binary cache
-fn save_clipboard_history(history: &VecDeque<ClipboardEntry>) -> Result<()> {
-    let vec: Vec<ClipboardEntry> = history.iter().cloned().collect();
-    crate::cache::save_cache("clipboard.bin", &vec)?;
-    Ok(())
-}
-
-/// Convert clipboard history to Elements for picker
-pub fn history_to_elements(history: &VecDeque<ClipboardEntry>) -> Vec<Element> {
-    history
+/// Save clipboard history to binary cache (as Elements for direct loading)
+fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
+    // Convert to Elements before saving
+    let elements: Vec<Element> = history
         .iter()
-        .map(|entry| {
+        .map(|content| {
+            // Normalize whitespace: replace newlines, tabs, and multiple spaces with single space
+            let normalized: String = content
+                .chars()
+                .map(|c| if c.is_whitespace() { ' ' } else { c })
+                .collect::<String>()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            
             // Truncate long content for display
-            let display = if entry.content.len() > 80 {
-                format!("{}...", &entry.content[..77])
+            let display = if normalized.len() > 80 {
+                format!("{}...", &normalized[..77])
             } else {
-                entry.content.clone()
+                normalized.clone()
             };
-
-            Element::new_clipboard_entry(display, entry.content.clone())
+            
+            // Use original content as value so paste preserves formatting
+            Element::new_clipboard_entry(display, content.clone())
         })
-        .collect()
+        .collect();
+    
+    crate::cache::save_cache("clipboard.bin", &elements)?;
+    Ok(())
 }

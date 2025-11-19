@@ -81,7 +81,7 @@ pub fn run() -> Result<()> {
     for dir in watch_dirs() {
         let path = Path::new(dir);
         if path.exists() {
-            match debouncer.watcher().watch(path, RecursiveMode::Recursive) {
+            match debouncer.watch(path, RecursiveMode::Recursive) {
                 Ok(_) => eprintln!("[apps daemon] Watching {}", dir),
                 Err(e) => eprintln!("[apps daemon] Failed to watch {}: {}", dir, e),
             }
@@ -94,7 +94,7 @@ pub fn run() -> Result<()> {
         let user_apps = format!("{}/Applications", home);
         let path = Path::new(&user_apps);
         if path.exists() {
-            match debouncer.watcher().watch(path, RecursiveMode::Recursive) {
+            match debouncer.watch(path, RecursiveMode::Recursive) {
                 Ok(_) => eprintln!("[apps daemon] Watching {}", user_apps),
                 Err(e) => eprintln!("[apps daemon] Failed to watch {}: {}", user_apps, e),
             }

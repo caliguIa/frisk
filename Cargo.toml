@@ -34,14 +34,13 @@ objc2-app-kit = { version = "0.3.2", features = [
 objc2-quartz-core = { version = "0.3.2", features = ["CALayer"] }
 evalexpr = "13.0"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
-notify = "6.1"
-notify-debouncer-full = "0.3"
+notify = "8.2"
+notify-debouncer-full = "0.6"
 clap = { version = "4.5", features = ["derive", "cargo"] }
 
 [profile.release]
 lto = true
-opt-level = "z"     # Optimize for size
-strip = true        # Strip symbols
-codegen-units = 1   # Better optimization
-panic = "abort"     # Smaller binary
-
+opt-level = "z"
+strip = true
+codegen-units = 1
+panic = "abort"

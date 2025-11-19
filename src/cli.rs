@@ -32,6 +32,10 @@ pub struct Cli {
     /// Load clipboard.bin
     #[arg(long, alias = "clip")]
     pub clipboard: bool,
+
+    /// Load custom commands from config
+    #[arg(long)]
+    pub commands: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -52,22 +56,22 @@ pub enum Commands {
 pub enum ServiceCommands {
     /// Install a LaunchAgent service
     Install {
-        /// Service name: apps, homebrew, clipboard, nixpkgs, or all
+        /// Service name: apps, homebrew, clipboard, or all
         name: String,
     },
     /// Uninstall a LaunchAgent service
     Uninstall {
-        /// Service name: apps, homebrew, clipboard, nixpkgs, or all
+        /// Service name: apps, homebrew, clipboard, or all
         name: String,
     },
     /// Start a LaunchAgent service
     Start {
-        /// Service name: apps, homebrew, clipboard, nixpkgs, or all
+        /// Service name: apps, homebrew, clipboard, or all
         name: String,
     },
     /// Stop a LaunchAgent service
     Stop {
-        /// Service name: apps, homebrew, clipboard, nixpkgs, or all
+        /// Service name: apps, homebrew, clipboard, or all
         name: String,
     },
     /// Show status of all services
@@ -84,12 +88,6 @@ pub enum DaemonCommands {
     Homebrew,
     /// Monitor clipboard and update clipboard.bin
     Clipboard,
-    /// Fetch nixpkgs and update nixpkgs.bin
-    Nixpkgs {
-        /// Force fetch even if cache is fresh
-        #[arg(long)]
-        force: bool,
-    },
 }
 
 pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {
@@ -97,8 +95,7 @@ pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {
         "apps" => Some(vec!["apps"]),
         "homebrew" | "brew" => Some(vec!["homebrew"]),
         "clipboard" | "clip" => Some(vec!["clipboard"]),
-        "nixpkgs" | "nix" => Some(vec!["nixpkgs"]),
-        "all" => Some(vec!["apps", "homebrew", "clipboard", "nixpkgs"]),
+        "all" => Some(vec!["apps", "homebrew", "clipboard"]),
         _ => None,
     }
 }
