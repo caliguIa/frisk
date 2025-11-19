@@ -4,16 +4,12 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 mod cache;
-mod calculator;
 mod cli;
-mod commands;
-mod config;
-mod daemons;
-mod element;
-mod error;
-mod gui;
+mod core;
+mod daemon;
 mod ipc;
 mod loader;
+mod picker;
 mod service;
 
 #[macro_use]
@@ -21,8 +17,8 @@ mod log;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use config::Config;
-use error::Result;
+use core::config::Config;
+use core::error::Result;
 use loader::{load_binary_file, load_binary_source};
 
 static LOCK_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
@@ -38,10 +34,10 @@ fn main() -> Result<()> {
         Some(Commands::Daemon { command }) => {
             use cli::DaemonCommands;
             match command {
-                DaemonCommands::Apps => daemons::apps::run(),
-                DaemonCommands::Homebrew => daemons::homebrew::run(),
-                DaemonCommands::Clipboard => daemons::clipboard::run(),
-                DaemonCommands::Nixpkgs => daemons::nixpkgs::run(),
+                DaemonCommands::Apps => daemon::apps::run(),
+                DaemonCommands::Homebrew => daemon::homebrew::run(),
+                DaemonCommands::Clipboard => daemon::clipboard::run(),
+                DaemonCommands::Nixpkgs => daemon::nixpkgs::run(),
             }
         }
         None => {
@@ -133,7 +129,7 @@ fn run_gui(cli: Cli) -> Result<()> {
 
     let after_config = Instant::now();
 
-    let mut elements = element::ElementList::new();
+    let mut elements = core::element::ElementList::new();
 
     if cli.apps {
         if let Some(apps) = load_binary_source("apps.bin")? {
@@ -190,7 +186,7 @@ fn run_gui(cli: Cli) -> Result<()> {
     }
 
     if cli.commands {
-        match commands::CommandsConfig::load() {
+        match core::commands::CommandsConfig::load() {
             Ok(commands_config) => {
                 for cmd in commands_config.to_elements() {
                     elements.add(cmd);
@@ -238,7 +234,7 @@ fn run_gui(cli: Cli) -> Result<()> {
         (after_discovery - start).as_secs_f64() * 1000.0
     );
 
-    gui::run(config, elements, Some(ipc_rx))?;
+    picker::run(config, elements, Some(ipc_rx))?;
 
     Ok(())
 }

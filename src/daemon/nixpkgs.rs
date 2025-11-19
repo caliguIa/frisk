@@ -1,5 +1,5 @@
-use crate::element::Element;
-use crate::error::Result;
+use crate::core::element::Element;
+use crate::core::error::Result;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -50,7 +50,7 @@ fn get_search_url() -> Result<String> {
             line.split('"').nth(1)
         })
         .ok_or_else(|| {
-            crate::error::Error::new("Could not parse frontend version from version.nix")
+            crate::core::error::Error::new("Could not parse frontend version from version.nix")
         })?;
 
     let url = format!(
@@ -104,7 +104,7 @@ fn fetch_nixpkgs_batch(
             .text()
             .unwrap_or_else(|_| "Could not read body".to_string());
         eprintln!("[nixpkgs daemon] API error {}: {}", status, body);
-        return Err(crate::error::Error::new(format!("API returned {}", status)));
+        return Err(crate::core::error::Error::new(format!("API returned {}", status)));
     }
 
     let search_response: NixpkgsSearchResponse = response.json()?;

@@ -1,5 +1,5 @@
 use crate::cli::{parse_service_name, ServiceCommands};
-use crate::error::{Error, Result};
+use crate::core::error::{Error, Result};
 use std::env;
 use std::fs;
 use std::io::Write;

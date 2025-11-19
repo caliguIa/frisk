@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::core::error::{Error, Result};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSColor, NSFont};
 use serde::{Deserialize, Serialize};

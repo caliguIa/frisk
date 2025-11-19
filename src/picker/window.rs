@@ -1,7 +1,7 @@
 use super::view::CustomView;
-use crate::config::Config;
-use crate::element::ElementList;
-use crate::error::{Error, Result};
+use crate::core::config::Config;
+use crate::core::element::ElementList;
+use crate::core::error::{Error, Result};
 use crate::ipc::IpcMessage;
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, MainThreadMarker, MainThreadOnly};

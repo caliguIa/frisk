@@ -3,9 +3,9 @@ mod state;
 mod view;
 mod window;
 
-use crate::config::Config;
-use crate::element::ElementList;
-use crate::error::{Error, Result};
+use crate::core::config::Config;
+use crate::core::element::ElementList;
+use crate::core::error::{Error, Result};
 use crate::ipc::IpcMessage;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSAccessibility, NSApplication, NSApplicationActivationPolicy};

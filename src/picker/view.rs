@@ -1,7 +1,7 @@
 use super::rendering::{draw_cursor, draw_text, measure_text_width};
 use super::state::AppState;
-use crate::config::Config;
-use crate::element::ElementList;
+use crate::core::config::Config;
+use crate::core::element::ElementList;
 use crate::ipc::IpcMessage;
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};

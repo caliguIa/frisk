@@ -1,7 +1,7 @@
-use crate::calculator::Calculator;
-use crate::config::Config;
-use crate::element::{Element, ElementList, ElementType};
-use crate::error::{Error, Result};
+use crate::core::calculator::Calculator;
+use crate::core::config::Config;
+use crate::core::element::{Element, ElementList, ElementType};
+use crate::core::error::{Error, Result};
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::NSString;
@@ -86,7 +86,7 @@ impl AppState {
                     self.calculator_result = Some(Element {
                         name: result.clone().into_boxed_str(),
                         value: result.into_boxed_str(),
-                        element_type: crate::element::ElementType::CalculatorResult,
+                        element_type: crate::core::element::ElementType::CalculatorResult,
                     });
                 }
             }
@@ -389,7 +389,11 @@ impl AppState {
             sources
         );
 
-        let mut new_elements = crate::element::ElementList::new();
+        // Clear query on reload
+        self.query.clear();
+        self.cursor_position = 0;
+
+        let mut new_elements = crate::core::element::ElementList::new();
 
         if apps {
             if let Ok(Some(app_list)) = crate::loader::load_binary_source("apps.bin") {
@@ -434,7 +438,7 @@ impl AppState {
         }
 
         if commands {
-            if let Ok(commands_config) = crate::commands::CommandsConfig::load() {
+            if let Ok(commands_config) = crate::core::commands::CommandsConfig::load() {
                 for cmd in commands_config.to_elements() {
                     new_elements.add(cmd);
                 }

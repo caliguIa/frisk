@@ -1,5 +1,5 @@
-use crate::element::Element;
-use crate::error::Result;
+use crate::core::element::Element;
+use crate::core::error::Result;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]

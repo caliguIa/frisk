@@ -1,5 +1,5 @@
-use crate::element::Element;
-use crate::error::Result;
+use crate::core::element::Element;
+use crate::core::error::Result;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use std::collections::VecDeque;
 use std::thread;

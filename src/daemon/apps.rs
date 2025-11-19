@@ -1,5 +1,5 @@
-use crate::element::Element;
-use crate::error::Result;
+use crate::core::element::Element;
+use crate::core::error::Result;
 use notify_debouncer_full::{new_debouncer, notify::*, DebounceEventResult};
 use std::path::Path;
 use std::process::Command;

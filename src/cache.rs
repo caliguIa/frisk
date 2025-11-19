@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::core::error::Result;
 use bincode::Encode;
 use std::env;
 use std::fs::{self, File};
@@ -8,7 +8,7 @@ pub fn cache_dir() -> Result<PathBuf> {
     let dir = PathBuf::from(
         env::var("XDG_CACHE_HOME")
             .or_else(|_| env::var("HOME").map(|home| format!("{}/.cache", home)))
-            .map_err(|_| crate::error::Error::new("Could not determine cache directory"))?,
+            .map_err(|_| crate::core::error::Error::new("Could not determine cache directory"))?,
     )
     .join("frisk");
 
