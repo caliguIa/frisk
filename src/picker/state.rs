@@ -187,19 +187,31 @@ impl AppState {
                                 let mut commands = false;
                                 let mut nixpkgs = false;
                                 let sources = vec![];
+                                let mut prompt = None;
+                                let mut i = 0;
 
-                                for arg in args {
-                                    match arg {
+                                while i < args.len() {
+                                    match args[i] {
                                         "--apps" => apps = true,
                                         "--homebrew" => homebrew = true,
                                         "--clipboard" => clipboard = true,
                                         "--commands" => commands = true,
                                         "--nixpkgs" => nixpkgs = true,
+                                        "--prompt" | "-p" => {
+                                            if i + 1 < args.len() {
+                                                i += 1;
+                                                // Remove quotes if present
+                                                let p = args[i];
+                                                let p = p.trim_matches(|c| c == '"' || c == '\'');
+                                                prompt = Some(p.to_string());
+                                            }
+                                        }
                                         _ => {}
                                     }
+                                    i += 1;
                                 }
 
-                                self.handle_reload(apps, homebrew, clipboard, commands, nixpkgs, sources);
+                                self.handle_reload(apps, homebrew, clipboard, commands, nixpkgs, sources, prompt);
                                 return Ok(());
                             }
 
@@ -378,16 +390,23 @@ impl AppState {
         commands: bool,
         nixpkgs: bool,
         sources: Vec<String>,
+        prompt: Option<String>,
     ) {
         crate::log!(
-            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, nixpkgs={}, sources={:?}",
+            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, nixpkgs={}, sources={:?}, prompt={:?}",
             apps,
             homebrew,
             clipboard,
             commands,
             nixpkgs,
-            sources
+            sources,
+            prompt
         );
+
+        // Update prompt if provided
+        if let Some(new_prompt) = prompt {
+            self.config.prompt = new_prompt;
+        }
 
         // Clear query on reload
         self.query.clear();

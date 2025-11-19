@@ -16,6 +16,7 @@ pub enum IpcMessage {
         commands: bool,
         nixpkgs: bool,
         sources: Vec<String>,
+        prompt: Option<String>,
     },
     Search {
         query: String,

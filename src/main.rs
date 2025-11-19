@@ -70,6 +70,7 @@ fn check_single_instance(cli: &Cli) -> Result<bool> {
                         commands: cli.commands,
                         nixpkgs: cli.nixpkgs,
                         sources: cli.source.iter().map(|p| p.display().to_string()).collect(),
+                        prompt: cli.prompt.clone(),
                     };
 
                     if ipc::send_message(&msg).is_ok() {
