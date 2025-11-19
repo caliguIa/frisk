@@ -6,17 +6,19 @@ mod window;
 use crate::config::Config;
 use crate::element::ElementList;
 use crate::error::{Error, Result};
+use crate::ipc::IpcMessage;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSAccessibility, NSApplication, NSApplicationActivationPolicy};
 use objc2_foundation::NSTimer;
 use block2::RcBlock;
+use std::sync::mpsc::Receiver;
 use window::create_window;
 
-pub fn run(config: Config, elements: ElementList) -> Result<()> {
+pub fn run(config: Config, elements: ElementList, ipc_rx: Option<Receiver<IpcMessage>>) -> Result<()> {
     let mtm = MainThreadMarker::new()
         .ok_or_else(|| Error::new("Must be called from main thread"))?;
 
-    let window = match create_window(mtm, config, elements) {
+    let window = match create_window(mtm, config, elements, ipc_rx) {
         Ok(window) => window,
         Err(error) => panic!("Error creating the window: {error:?}"),
     };

@@ -2,6 +2,7 @@ use super::view::CustomView;
 use crate::config::Config;
 use crate::element::ElementList;
 use crate::error::{Error, Result};
+use crate::ipc::IpcMessage;
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
@@ -9,11 +10,13 @@ use objc2_app_kit::{
     NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
+use std::sync::mpsc::Receiver;
 
 pub fn create_window(
     mtm: MainThreadMarker,
     config: Config,
     elements: ElementList,
+    ipc_rx: Option<Receiver<IpcMessage>>,
 ) -> Result<Retained<BorderlessKeyWindow>> {
     let active_screen =
         NSScreen::mainScreen(mtm).ok_or_else(|| Error::new("Failed to find main screen"))?;
@@ -38,6 +41,7 @@ pub fn create_window(
         elements,
         window_rect.size.height,
         active_screen.frame().size.height - active_screen.visibleFrame().size.height,
+        ipc_rx,
         mtm,
     );
 

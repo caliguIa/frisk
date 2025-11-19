@@ -12,6 +12,7 @@ mod daemons;
 mod element;
 mod error;
 mod gui;
+mod ipc;
 mod loader;
 mod service;
 
@@ -45,12 +46,13 @@ fn main() -> Result<()> {
         None => {
             let result = run_gui(cli);
             cleanup_lock_file();
+            ipc::cleanup();
             result
         }
     }
 }
 
-fn check_single_instance() -> Result<()> {
+fn check_single_instance(cli: &Cli) -> Result<bool> {
     let lock_file = get_lock_file_path()?;
 
     if lock_file.exists() {
@@ -63,9 +65,21 @@ fn check_single_instance() -> Result<()> {
                     .status();
 
                 if status.is_ok() && status.unwrap().success() {
-                    return Err(error::Error::new(
-                        "Another instance of frisk is already running",
-                    ));
+                    // Another instance is running - send IPC message
+                    let msg = ipc::IpcMessage::Reload {
+                        apps: cli.apps,
+                        homebrew: cli.homebrew,
+                        clipboard: cli.clipboard,
+                        commands: cli.commands,
+                        sources: cli.source.iter().map(|p| p.display().to_string()).collect(),
+                    };
+                    
+                    // Try to send IPC message - if it fails, fall through and start new instance
+                    if ipc::send_message(&msg).is_ok() {
+                        return Ok(true); // Successfully sent message
+                    }
+                    // If send failed (socket doesn't exist), remove stale lock and continue
+                    let _ = fs::remove_file(&lock_file);
                 }
             }
         }
@@ -77,7 +91,7 @@ fn check_single_instance() -> Result<()> {
 
     *LOCK_FILE.lock().unwrap() = Some(lock_file);
 
-    Ok(())
+    Ok(false) // No existing instance
 }
 
 fn cleanup_lock_file() {
@@ -96,7 +110,15 @@ fn get_lock_file_path() -> Result<PathBuf> {
 }
 
 fn run_gui(cli: Cli) -> Result<()> {
-    check_single_instance()?;
+    // Check if another instance is running and send IPC message if so
+    let sent_ipc = check_single_instance(&cli)?;
+    if sent_ipc {
+        crate::log!("Sent reload message to existing instance");
+        return Ok(());
+    }
+
+    // Start IPC listener
+    let ipc_rx = ipc::start_listener()?;
 
     let start = Instant::now();
 
@@ -208,7 +230,7 @@ fn run_gui(cli: Cli) -> Result<()> {
         (after_discovery - start).as_secs_f64() * 1000.0
     );
 
-    gui::run(config, elements)?;
+    gui::run(config, elements, Some(ipc_rx))?;
 
     Ok(())
 }

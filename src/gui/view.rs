@@ -2,11 +2,13 @@ use super::rendering::{draw_cursor, draw_text, measure_text_width};
 use super::state::AppState;
 use crate::config::Config;
 use crate::element::ElementList;
+use crate::ipc::IpcMessage;
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
 use objc2_app_kit::{NSBezierPath, NSEvent, NSView};
 use objc2_foundation::NSRect;
 use std::cell::RefCell;
+use std::sync::mpsc::Receiver;
 
 const KEY_ESCAPE: u16 = 53;
 const KEY_ENTER: u16 = 36;
@@ -19,6 +21,7 @@ const KEY_UP: u16 = 126;
 
 pub struct Ivars {
     state: RefCell<AppState>,
+    ipc_rx: RefCell<Option<Receiver<IpcMessage>>>,
 }
 
 define_class!(
@@ -30,6 +33,13 @@ define_class!(
     impl CustomView {
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty_rect: NSRect) {
+            // Check for IPC messages
+            if let Some(rx) = self.ivars().ipc_rx.borrow().as_ref() {
+                if let Ok(msg) = rx.try_recv() {
+                    self.handle_ipc_message(msg);
+                }
+            }
+
             let mut state = self.ivars().state.borrow_mut();
 
             state.update_string_caches();
@@ -278,6 +288,7 @@ impl CustomView {
         elements: ElementList,
         window_height: f64,
         menubar_height: f64,
+        ipc_rx: Option<Receiver<IpcMessage>>,
         mtm: objc2::MainThreadMarker,
     ) -> Retained<Self> {
         unsafe {
@@ -289,9 +300,25 @@ impl CustomView {
                         window_height,
                         menubar_height,
                     )),
+                    ipc_rx: RefCell::new(ipc_rx),
                 })),
                 init
             ]
+        }
+    }
+
+    fn handle_ipc_message(&self, msg: IpcMessage) {
+        match msg {
+            IpcMessage::Reload {
+                apps,
+                homebrew,
+                clipboard,
+                commands,
+                sources,
+            } => {
+                let mut state = self.ivars().state.borrow_mut();
+                state.handle_reload(apps, homebrew, clipboard, commands, sources);
+            }
         }
     }
 }

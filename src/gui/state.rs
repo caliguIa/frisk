@@ -181,7 +181,31 @@ impl AppState {
                             crate::log!("Executing system command: {}", element.name);
                             let command = element.value.as_ref();
 
-                            // Execute the command
+                            // Check if this is a frisk command - if so, reload in place instead of spawning
+                            if command.trim().starts_with("frisk ") || command.trim() == "frisk" {
+                                // Parse frisk arguments and reload current instance
+                                let args: Vec<&str> = command.split_whitespace().skip(1).collect();
+                                let mut apps = false;
+                                let mut homebrew = false;
+                                let mut clipboard = false;
+                                let mut commands = false;
+                                let sources = vec![];
+                                
+                                for arg in args {
+                                    match arg {
+                                        "--apps" => apps = true,
+                                        "--homebrew" => homebrew = true,
+                                        "--clipboard" => clipboard = true,
+                                        "--commands" => commands = true,
+                                        _ => {}
+                                    }
+                                }
+                                
+                                self.handle_reload(apps, homebrew, clipboard, commands, sources);
+                                return Ok(());
+                            }
+
+                            // Execute the command normally
                             Command::new("sh")
                                 .arg("-c")
                                 .arg(command)
@@ -351,5 +375,58 @@ impl AppState {
         if let Some(mtm) = MainThreadMarker::new() {
             NSApplication::sharedApplication(mtm).terminate(None);
         }
+    }
+
+    pub fn handle_reload(&mut self, apps: bool, homebrew: bool, clipboard: bool, commands: bool, sources: Vec<String>) {
+        crate::log!("Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, sources={:?}",
+            apps, homebrew, clipboard, commands, sources);
+        
+        let mut new_elements = crate::element::ElementList::new();
+        
+        if apps {
+            if let Ok(Some(app_list)) = crate::loader::load_binary_source("apps.bin") {
+                for app in app_list {
+                    new_elements.add(app);
+                }
+            }
+        }
+        
+        if homebrew {
+            if let Ok(Some(brew_list)) = crate::loader::load_binary_source("homebrew.bin") {
+                for item in brew_list {
+                    new_elements.add(item);
+                }
+            }
+        }
+        
+        if clipboard {
+            if let Ok(Some(clip_list)) = crate::loader::load_binary_source("clipboard.bin") {
+                for item in clip_list {
+                    new_elements.add(item);
+                }
+            }
+        }
+        
+        for source_path in sources {
+            if let Ok(items) = crate::loader::load_binary_file(&std::path::PathBuf::from(source_path)) {
+                for item in items {
+                    new_elements.add(item);
+                }
+            }
+        }
+        
+        if commands {
+            if let Ok(commands_config) = crate::commands::CommandsConfig::load() {
+                for cmd in commands_config.to_elements() {
+                    new_elements.add(cmd);
+                }
+            }
+        }
+        
+        self.elements = new_elements;
+        self.query.clear();
+        self.cursor_position = 0;
+        self.update_search();
+        crate::log!("Reloaded {} elements", self.elements.len());
     }
 }

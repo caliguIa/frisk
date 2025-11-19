@@ -75,4 +75,10 @@ impl From<notify::Error> for Error {
     }
 }
 
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Self::new(format!("JSON error: {}", err))
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
