@@ -47,22 +47,6 @@ impl Element {
         }
     }
 
-    pub fn new_nix_package(name: String, value: String) -> Self {
-        Self {
-            name: name.into_boxed_str(),
-            value: value.into_boxed_str(),
-            element_type: ElementType::NixPackage,
-        }
-    }
-
-    pub fn new_rust_crate(name: String, url: String) -> Self {
-        Self {
-            name: name.into_boxed_str(),
-            value: url.into_boxed_str(),
-            element_type: ElementType::RustCrate,
-        }
-    }
-
     pub fn new_homebrew_package(name: String, url: String) -> Self {
         Self {
             name: name.into_boxed_str(),

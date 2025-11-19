@@ -8,7 +8,6 @@ use std::time::Duration;
 const MAX_HISTORY: usize = 1000;
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
-/// Monitor clipboard and save history
 pub fn run() -> Result<()> {
     eprintln!("[clipboard daemon] Starting...");
 
@@ -56,7 +55,6 @@ pub fn run() -> Result<()> {
     }
 }
 
-/// Save clipboard history to binary cache (as Elements for direct loading)
 fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
     // Convert to Elements before saving
     let elements: Vec<Element> = history

@@ -23,7 +23,6 @@ struct CaskInfo {
     homepage: Option<String>,
 }
 
-/// Fetch homebrew packages and save to binary cache
 fn fetch_homebrew() -> Result<Vec<Element>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -83,7 +82,6 @@ fn fetch_homebrew() -> Result<Vec<Element>> {
     Ok(elements)
 }
 
-/// Save homebrew packages to binary cache
 fn save_homebrew(elements: &[Element]) -> Result<()> {
     let cache_path = crate::cache::cache_dir()?.join("homebrew.bin");
     let vec = elements.to_vec();

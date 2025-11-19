@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::Instant;
 
 mod cache;
@@ -23,6 +24,8 @@ use config::Config;
 use error::Result;
 use loader::{load_binary_file, load_binary_source};
 
+static LOCK_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -39,44 +42,49 @@ fn main() -> Result<()> {
                 DaemonCommands::Clipboard => daemons::clipboard::run(),
             }
         }
-        None => run_gui(cli),
+        None => {
+            let result = run_gui(cli);
+            cleanup_lock_file();
+            result
+        }
     }
 }
 
-/// Check if another instance is already running
 fn check_single_instance() -> Result<()> {
     let lock_file = get_lock_file_path()?;
 
-    // Check if lock file exists and process is still running
     if lock_file.exists() {
         if let Ok(pid_str) = fs::read_to_string(&lock_file) {
             if let Ok(pid) = pid_str.trim().parse::<i32>() {
-                // Check if process is still running using kill -0
                 let status = std::process::Command::new("kill")
                     .arg("-0")
                     .arg(pid.to_string())
                     .status();
 
                 if status.is_ok() && status.unwrap().success() {
-                    // Process is still running
                     return Err(error::Error::new(
                         "Another instance of kickoff is already running",
                     ));
                 }
             }
         }
-        // Old lock file from crashed process, remove it
         let _ = fs::remove_file(&lock_file);
     }
 
-    // Write our PID to lock file
     let pid = std::process::id();
     fs::write(&lock_file, pid.to_string())?;
+
+    *LOCK_FILE.lock().unwrap() = Some(lock_file);
 
     Ok(())
 }
 
-/// Get path to lock file
+fn cleanup_lock_file() {
+    if let Some(path) = LOCK_FILE.lock().unwrap().take() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 fn get_lock_file_path() -> Result<PathBuf> {
     let runtime_dir = if let Ok(dir) = std::env::var("TMPDIR") {
         PathBuf::from(dir)
@@ -87,7 +95,6 @@ fn get_lock_file_path() -> Result<PathBuf> {
 }
 
 fn run_gui(cli: Cli) -> Result<()> {
-    // Ensure only one instance is running
     check_single_instance()?;
 
     let start = Instant::now();
@@ -98,7 +105,6 @@ fn run_gui(cli: Cli) -> Result<()> {
         Config::load(None)?
     };
 
-    // Override prompt if specified
     let config = if let Some(prompt) = cli.prompt {
         let mut config = config;
         config.prompt = prompt;
@@ -109,10 +115,8 @@ fn run_gui(cli: Cli) -> Result<()> {
 
     let after_config = Instant::now();
 
-    // Load elements from binary sources
     let mut elements = element::ElementList::new();
 
-    // Load apps from apps.bin if requested
     if cli.apps {
         if let Some(apps) = load_binary_source("apps.bin")? {
             let count = apps.len();
@@ -126,7 +130,6 @@ fn run_gui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Load homebrew from homebrew.bin if requested
     if cli.homebrew {
         if let Some(homebrew_apps) = load_binary_source("homebrew.bin")? {
             let count = homebrew_apps.len();
@@ -140,7 +143,6 @@ fn run_gui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Load clipboard from clipboard.bin if requested
     if cli.clipboard {
         if let Some(clipboard_items) = load_binary_source("clipboard.bin")? {
             let count = clipboard_items.len();
@@ -154,7 +156,6 @@ fn run_gui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Load additional custom sources
     for source_path in &cli.source {
         match load_binary_file(source_path) {
             Ok(items) => {
@@ -170,7 +171,6 @@ fn run_gui(cli: Cli) -> Result<()> {
         }
     }
 
-    // Load custom commands from config (only if --commands flag is set)
     if cli.commands {
         match commands::CommandsConfig::load() {
             Ok(commands_config) => {
@@ -190,7 +190,7 @@ fn run_gui(cli: Cli) -> Result<()> {
     crate::log!(
         "Loaded {} items (apps + system commands), estimated memory: ~{} KB",
         elements.len(),
-        elements.len() * 60 / 1024 // rough estimate
+        elements.len() * 60 / 1024
     );
 
     crate::log!("⏱️  Timing breakdown:");
@@ -208,11 +208,6 @@ fn run_gui(cli: Cli) -> Result<()> {
     );
 
     gui::run(config, elements)?;
-
-    // Clean up lock file on normal exit
-    if let Ok(lock_file) = get_lock_file_path() {
-        let _ = fs::remove_file(lock_file);
-    }
 
     Ok(())
 }
