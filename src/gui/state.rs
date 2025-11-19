@@ -188,18 +188,21 @@ impl AppState {
         }
 
         // Perform the search based on mode
-        let search_result = match self.mode {
+        let search_result: Result<ElementList> = match self.mode {
             AppMode::NixpkgsSearch => {
                 crate::log!("Performing debounced nixpkgs search for: {}", self.query);
-                crate::nixpkgs::search_nixpkgs(&self.query)
+                // Nixpkgs search removed - use --nixpkgs flag to load nixpkgs.bin
+                Ok(ElementList::new())
             }
             AppMode::CratesSearch => {
                 crate::log!("Performing debounced crates search for: {}", self.query);
-                crate::crates::search_crates(&self.query)
+                // Crates search removed - functionality moved to external services
+                Ok(ElementList::new())
             }
             AppMode::HomebrewSearch => {
                 crate::log!("Performing debounced homebrew search for: {}", self.query);
-                crate::homebrew::search_homebrew(&self.query)
+                // Homebrew search removed - use --homebrew flag to load homebrew.bin
+                Ok(ElementList::new())
             }
             _ => return false,
         };
@@ -297,10 +300,7 @@ impl AppState {
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
-                                // Track in clipboard history
-                                let _ = crate::clipboard::add_to_clipboard_history(
-                                    element.value.to_string(),
-                                );
+                                // Clipboard history tracked by daemon automatically
                                 self.should_exit = true;
                             } else {
                                 return Err(Error::new("Failed to copy"));
@@ -312,20 +312,8 @@ impl AppState {
 
                             // Check for special commands that switch modes
                             if command == "__clipboard_history__" {
-                                // Switch to clipboard history mode
-                                crate::log!("Switching to clipboard history mode");
-                                match crate::clipboard::load_clipboard_history_elements() {
-                                    Ok(elements) => {
-                                        self.elements = elements;
-                                        self.mode = AppMode::ClipboardHistory;
-                                        self.query.clear();
-                                        self.cursor_position = 0;
-                                        self.update_search();
-                                    }
-                                    Err(e) => {
-                                        crate::log!("Failed to load clipboard history: {}", e);
-                                    }
-                                }
+                                // Clipboard history is now loaded via --clipboard flag
+                                crate::log!("Use --clipboard flag to load clipboard history");
                             } else if command == "__nixpkgs__" {
                                 // Switch to nixpkgs mode - start with empty list
                                 crate::log!("Switching to nixpkgs search mode");
@@ -383,10 +371,7 @@ impl AppState {
                             if unsafe {
                                 pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
                             } {
-                                // Track in clipboard history
-                                let _ = crate::clipboard::add_to_clipboard_history(
-                                    element.value.to_string(),
-                                );
+                                // Clipboard history tracked by daemon automatically
                                 self.should_exit = true;
                             } else {
                                 return Err(Error::new("Failed to copy"));

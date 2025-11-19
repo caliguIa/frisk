@@ -69,4 +69,10 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        Self::new(format!("Filesystem watch error: {}", err))
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
