@@ -185,6 +185,7 @@ impl AppState {
                                 let mut homebrew = false;
                                 let mut clipboard = false;
                                 let mut commands = false;
+                                let mut nixpkgs = false;
                                 let sources = vec![];
 
                                 for arg in args {
@@ -193,11 +194,12 @@ impl AppState {
                                         "--homebrew" => homebrew = true,
                                         "--clipboard" => clipboard = true,
                                         "--commands" => commands = true,
+                                        "--nixpkgs" => nixpkgs = true,
                                         _ => {}
                                     }
                                 }
 
-                                self.handle_reload(apps, homebrew, clipboard, commands, sources);
+                                self.handle_reload(apps, homebrew, clipboard, commands, nixpkgs, sources);
                                 return Ok(());
                             }
 
@@ -374,14 +376,16 @@ impl AppState {
         homebrew: bool,
         clipboard: bool,
         commands: bool,
+        nixpkgs: bool,
         sources: Vec<String>,
     ) {
         crate::log!(
-            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, sources={:?}",
+            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, nixpkgs={}, sources={:?}",
             apps,
             homebrew,
             clipboard,
             commands,
+            nixpkgs,
             sources
         );
 
@@ -406,6 +410,14 @@ impl AppState {
         if clipboard {
             if let Ok(Some(clip_list)) = crate::loader::load_binary_source("clipboard.bin") {
                 for item in clip_list {
+                    new_elements.add(item);
+                }
+            }
+        }
+
+        if nixpkgs {
+            if let Ok(Some(nix_list)) = crate::loader::load_binary_source("nixpkgs.bin") {
+                for item in nix_list {
                     new_elements.add(item);
                 }
             }

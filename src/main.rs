@@ -72,6 +72,7 @@ fn check_single_instance(cli: &Cli) -> Result<bool> {
                         homebrew: cli.homebrew,
                         clipboard: cli.clipboard,
                         commands: cli.commands,
+                        nixpkgs: cli.nixpkgs,
                         sources: cli.source.iter().map(|p| p.display().to_string()).collect(),
                     };
 

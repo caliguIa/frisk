@@ -14,6 +14,7 @@ pub enum IpcMessage {
         homebrew: bool,
         clipboard: bool,
         commands: bool,
+        nixpkgs: bool,
         sources: Vec<String>,
     },
     Search {

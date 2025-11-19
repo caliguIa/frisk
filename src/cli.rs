@@ -79,7 +79,8 @@ pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {
         "apps" => Some(vec!["apps"]),
         "homebrew" | "brew" => Some(vec!["homebrew"]),
         "clipboard" | "clip" => Some(vec!["clipboard"]),
-        "all" => Some(vec!["apps", "homebrew", "clipboard"]),
+        "nixpkgs" | "nix" => Some(vec!["nixpkgs"]),
+        "all" => Some(vec!["apps", "homebrew", "clipboard", "nixpkgs"]),
         _ => None,
     }
 }

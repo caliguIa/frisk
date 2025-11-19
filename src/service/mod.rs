@@ -152,6 +152,7 @@ impl Service {
             "apps" => vec!["daemon".to_string(), "apps".to_string()],
             "homebrew" => vec!["daemon".to_string(), "homebrew".to_string()],
             "clipboard" => vec!["daemon".to_string(), "clipboard".to_string()],
+            "nixpkgs" => vec!["daemon".to_string(), "nixpkgs".to_string()],
             _ => unreachable!("Invalid service name: {}", self.name),
         };
 
@@ -161,8 +162,14 @@ impl Service {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let keep_alive = matches!(self.name.as_str(), "apps" | "clipboard");
-        let start_interval = (self.name.as_str() == "homebrew").then_some(3600);
+        let keep_alive = matches!(self.name.as_str(), "clipboard");
+        // homebrew: hourly, nixpkgs: twice daily (12 hours)
+        let start_interval = match self.name.as_str() {
+            "homebrew" => Some(3600),        // 1 hour
+            "nixpkgs" => Some(43200),        // 12 hours
+            "apps" => Some(3600),             // 1 hour (changed from KeepAlive)
+            _ => None,
+        };
 
         let mut plist = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -260,7 +267,7 @@ fn show_status() -> Result<()> {
     println!("Frisk Services Status:");
     println!();
 
-    let all_services = vec!["apps", "homebrew", "clipboard"];
+    let all_services = vec!["apps", "homebrew", "clipboard", "nixpkgs"];
     
     for service_name in all_services {
         let service = Service::new(service_name.to_string())?;
@@ -300,9 +307,10 @@ fn is_service_running(label: &str) -> bool {
 fn list_services() {
     println!("Available services:");
     println!();
-    println!("  apps       - Watch application directories for changes");
+    println!("  apps       - Refresh application cache hourly");
     println!("  homebrew   - Fetch homebrew packages hourly");
-    println!("  clipboard  - Monitor clipboard for history");
+    println!("  clipboard  - Monitor clipboard for history (persistent)");
+    println!("  nixpkgs    - Fetch nixpkgs packages twice daily");
     println!();
     println!("Use 'all' to operate on all services at once");
 }
