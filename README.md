@@ -2,17 +2,9 @@
 
 A fast application launcher and search tool for macOS. Written in Rust with native Cocoa bindings.
 
-## Installation
-
-```bash
-cargo install --path .
-```
-
-The binary will be installed to `~/.cargo/bin/frisk`.
-
 ## Usage
 
-Basic launcher with no sources:
+Launcher with no sources:
 
 ```bash
 frisk
@@ -122,11 +114,6 @@ action = "osascript -e 'tell application \"Finder\" to empty trash'"
 [[command]]
 name = "Restart"
 action = "osascript -e 'tell application \"System Events\" to restart'"
-
-[[command]]
-name = "Google Search"
-command = "open 'https://www.google.com/search?q=test'"
-
 ```
 
 ### Configuration
