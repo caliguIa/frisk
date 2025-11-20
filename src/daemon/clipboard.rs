@@ -1,7 +1,7 @@
 use crate::core::element::Element;
 use crate::core::error::Result;
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
-use std::collections::VecDeque;
+
 use std::thread;
 use std::time::Duration;
 
@@ -13,7 +13,7 @@ pub fn run() -> Result<()> {
 
     let pasteboard = NSPasteboard::generalPasteboard();
     let mut last_change_count = pasteboard.changeCount();
-    let mut history: VecDeque<String> = VecDeque::new();
+    let mut last_content: Option<String> = None;
 
     eprintln!("[clipboard daemon] Monitoring clipboard...");
 
@@ -28,20 +28,15 @@ pub fn run() -> Result<()> {
                 let trimmed = content_str.trim();
 
                 if !trimmed.is_empty()
-                    && history.front().map(|e| e == &content_str).unwrap_or(false) == false
+                    && last_content.as_ref().map(|e| e == &content_str).unwrap_or(false) == false
                 {
-                    history.push_front(content_str.clone());
-
-                    // Trim to max size
-                    while history.len() > MAX_HISTORY {
-                        history.pop_back();
-                    }
+                    last_content = Some(content_str.clone());
 
                     // Save to file
-                    if let Err(e) = save_clipboard_history(&history) {
+                    if let Err(e) = append_clipboard_entry(&content_str) {
                         eprintln!("[clipboard daemon] Failed to save: {}", e);
                     } else {
-                        eprintln!("[clipboard daemon] Saved entry ({} total)", history.len());
+                        eprintln!("[clipboard daemon] Saved entry");
                     }
                 }
             }
@@ -51,32 +46,35 @@ pub fn run() -> Result<()> {
     }
 }
 
-fn save_clipboard_history(history: &VecDeque<String>) -> Result<()> {
-    let elements: Vec<Element> = history
-        .iter()
-        .filter_map(|content| {
-            let normalized: String = content
-                .chars()
-                .map(|c| if c.is_whitespace() { ' ' } else { c })
-                .collect::<String>()
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ");
+fn append_clipboard_entry(content: &str) -> Result<()> {
+    // Load existing history
+    let mut elements: Vec<Element> = crate::loader::load_binary_source("clipboard.bin")?
+        .unwrap_or_default();
 
-            if normalized.is_empty() {
-                return None;
-            }
+    // Create new element
+    let normalized: String = content
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
-            let display = if normalized.len() > 80 {
-                format!("{}...", &normalized[..77])
-            } else {
-                normalized.clone()
-            };
+    if !normalized.is_empty() {
+        let display = if normalized.len() > 80 {
+            format!("{}...", &normalized[..77])
+        } else {
+            normalized.clone()
+        };
 
-            Some(Element::new_clipboard_entry(display, content.clone()))
-        })
-        .collect();
+        let new_element = Element::new_clipboard_entry(display, content.to_string());
+        
+        // Add to front and trim to max size
+        elements.insert(0, new_element);
+        elements.truncate(MAX_HISTORY);
 
-    crate::cache::save_cache("clipboard.bin", &elements)?;
+        crate::cache::save_cache("clipboard.bin", &elements)?;
+    }
+
     Ok(())
 }
