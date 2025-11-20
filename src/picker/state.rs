@@ -211,7 +211,9 @@ impl AppState {
                                     i += 1;
                                 }
 
-                                self.handle_reload(apps, homebrew, clipboard, commands, nixpkgs, sources, prompt);
+                                self.handle_reload(
+                                    apps, homebrew, clipboard, commands, nixpkgs, sources, prompt,
+                                );
                                 return Ok(());
                             }
 

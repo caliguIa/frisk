@@ -28,7 +28,11 @@ pub fn run() -> Result<()> {
                 let trimmed = content_str.trim();
 
                 if !trimmed.is_empty()
-                    && last_content.as_ref().map(|e| e == &content_str).unwrap_or(false) == false
+                    && last_content
+                        .as_ref()
+                        .map(|e| e == &content_str)
+                        .unwrap_or(false)
+                        == false
                 {
                     last_content = Some(content_str.clone());
 
@@ -48,8 +52,8 @@ pub fn run() -> Result<()> {
 
 fn append_clipboard_entry(content: &str) -> Result<()> {
     // Load existing history
-    let mut elements: Vec<Element> = crate::loader::load_binary_source("clipboard.bin")?
-        .unwrap_or_default();
+    let mut elements: Vec<Element> =
+        crate::loader::load_binary_source("clipboard.bin")?.unwrap_or_default();
 
     // Create new element
     let normalized: String = content
@@ -68,7 +72,7 @@ fn append_clipboard_entry(content: &str) -> Result<()> {
         };
 
         let new_element = Element::new_clipboard_entry(display, content.to_string());
-        
+
         // Add to front and trim to max size
         elements.insert(0, new_element);
         elements.truncate(MAX_HISTORY);

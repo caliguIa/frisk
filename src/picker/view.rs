@@ -314,7 +314,9 @@ impl CustomView {
                 prompt,
             } => {
                 let mut state = self.ivars().state.borrow_mut();
-                state.handle_reload(apps, homebrew, clipboard, commands, nixpkgs, sources, prompt);
+                state.handle_reload(
+                    apps, homebrew, clipboard, commands, nixpkgs, sources, prompt,
+                );
             }
             IpcMessage::Search { .. } => {}
         }

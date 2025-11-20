@@ -5,6 +5,10 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+pub mod apps;
+pub mod clipboard;
+pub mod homebrew;
+pub mod nixpkgs;
 
 const SERVICE_PREFIX: &str = "io.calrichards.frisk";
 
@@ -165,9 +169,9 @@ impl Service {
         let keep_alive = matches!(self.name.as_str(), "clipboard");
         // homebrew: hourly, nixpkgs: twice daily (12 hours)
         let start_interval = match self.name.as_str() {
-            "homebrew" => Some(3600),        // 1 hour
-            "nixpkgs" => Some(43200),        // 12 hours
-            "apps" => Some(3600),             // 1 hour (changed from KeepAlive)
+            "homebrew" => Some(3600), // 1 hour
+            "nixpkgs" => Some(43200), // 12 hours
+            "apps" => Some(3600),     // 1 hour (changed from KeepAlive)
             _ => None,
         };
 
@@ -224,7 +228,7 @@ pub fn handle_service_command(cmd: ServiceCommands) -> Result<()> {
         ServiceCommands::Install { name } => {
             let services = parse_service_name(&name)
                 .ok_or_else(|| Error::new(format!("Unknown service name: {}", name)))?;
-            
+
             for service_name in services {
                 Service::new(service_name.to_string())?.install()?;
             }
@@ -232,7 +236,7 @@ pub fn handle_service_command(cmd: ServiceCommands) -> Result<()> {
         ServiceCommands::Uninstall { name } => {
             let services = parse_service_name(&name)
                 .ok_or_else(|| Error::new(format!("Unknown service name: {}", name)))?;
-            
+
             for service_name in services {
                 Service::new(service_name.to_string())?.uninstall()?;
             }
@@ -240,7 +244,7 @@ pub fn handle_service_command(cmd: ServiceCommands) -> Result<()> {
         ServiceCommands::Start { name } => {
             let services = parse_service_name(&name)
                 .ok_or_else(|| Error::new(format!("Unknown service name: {}", name)))?;
-            
+
             for service_name in services {
                 Service::new(service_name.to_string())?.start()?;
             }
@@ -248,7 +252,7 @@ pub fn handle_service_command(cmd: ServiceCommands) -> Result<()> {
         ServiceCommands::Stop { name } => {
             let services = parse_service_name(&name)
                 .ok_or_else(|| Error::new(format!("Unknown service name: {}", name)))?;
-            
+
             for service_name in services {
                 Service::new(service_name.to_string())?.stop()?;
             }
@@ -268,7 +272,7 @@ fn show_status() -> Result<()> {
     println!();
 
     let all_services = vec!["apps", "homebrew", "clipboard", "nixpkgs"];
-    
+
     for service_name in all_services {
         let service = Service::new(service_name.to_string())?;
         let installed = service.is_installed();
@@ -293,10 +297,7 @@ fn show_status() -> Result<()> {
 }
 
 fn is_service_running(label: &str) -> bool {
-    let output = Command::new("launchctl")
-        .arg("list")
-        .arg(label)
-        .output();
+    let output = Command::new("launchctl").arg("list").arg(label).output();
 
     match output {
         Ok(output) => output.status.success(),

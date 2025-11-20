@@ -6,11 +6,10 @@ use std::time::Instant;
 mod cache;
 mod cli;
 mod core;
-mod daemon;
 mod ipc;
 mod loader;
 mod picker;
-mod service;
+mod services;
 
 #[macro_use]
 mod log;
@@ -28,16 +27,16 @@ fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::Service { command }) => {
-            service::handle_service_command(command)?;
+            services::handle_service_command(command)?;
             Ok(())
         }
         Some(Commands::Daemon { command }) => {
             use cli::DaemonCommands;
             match command {
-                DaemonCommands::Apps => daemon::apps::run(),
-                DaemonCommands::Homebrew => daemon::homebrew::run(),
-                DaemonCommands::Clipboard => daemon::clipboard::run(),
-                DaemonCommands::Nixpkgs => daemon::nixpkgs::run(),
+                DaemonCommands::Apps => services::apps::run(),
+                DaemonCommands::Homebrew => services::homebrew::run(),
+                DaemonCommands::Clipboard => services::clipboard::run(),
+                DaemonCommands::Nixpkgs => services::nixpkgs::run(),
             }
         }
         None => {

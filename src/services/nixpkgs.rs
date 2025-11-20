@@ -104,7 +104,10 @@ fn fetch_nixpkgs_batch(
             .text()
             .unwrap_or_else(|_| "Could not read body".to_string());
         eprintln!("[nixpkgs daemon] API error {}: {}", status, body);
-        return Err(crate::core::error::Error::new(format!("API returned {}", status)));
+        return Err(crate::core::error::Error::new(format!(
+            "API returned {}",
+            status
+        )));
     }
 
     let search_response: NixpkgsSearchResponse = response.json()?;
