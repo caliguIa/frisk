@@ -138,10 +138,10 @@ fn fetch_dictionary() -> Result<Vec<Element>> {
     let mut seen = std::collections::HashSet::new();
     let mut elements = Vec::new();
 
-    for (word_pos, definition) in all_entries {
-        if seen.insert(word_pos.clone()) {
-            let display_name = format!("{} - {}", word_pos, definition);
-            elements.push(Element::new_dictionary(display_name, definition));
+    for (word, definition) in all_entries {
+        if seen.insert(word.clone()) {
+            let display_name = format!("{} - {}", word, definition);
+            elements.push(Element::new_dictionary(display_name, word));
         }
     }
 

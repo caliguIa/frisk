@@ -95,11 +95,31 @@ impl ElementList {
     pub fn search(&mut self, query: &str) -> Vec<usize> {
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
         let mut matches: Vec<(usize, u32)> = Vec::with_capacity(20);
+        let query_lower = query.to_lowercase();
 
         for (idx, element) in self.inner.iter().enumerate() {
-            let haystack = Utf32Str::new(&element.name, &mut self.char_buf);
+            let search_text = match element.element_type {
+                ElementType::Dictionary => &element.value,
+                _ => &element.name,
+            };
 
-            if let Some(score) = pattern.score(haystack, &mut self.matcher) {
+            let haystack = Utf32Str::new(search_text, &mut self.char_buf);
+
+            if let Some(mut score) = pattern.score(haystack, &mut self.matcher) {
+                if matches!(element.element_type, ElementType::Dictionary) {
+                    let text_lower = search_text.to_lowercase();
+                    if text_lower == query_lower {
+                        score = score.saturating_add(10000);
+                    } else if text_lower.starts_with(&query_lower)
+                        && text_lower
+                            .chars()
+                            .nth(query_lower.len())
+                            .map_or(false, |c| c == ' ' || !c.is_alphanumeric())
+                    {
+                        score = score.saturating_add(5000);
+                    }
+                }
+
                 matches.push((idx, score));
             }
         }
