@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 pub mod apps;
 pub mod clipboard;
+pub mod dictionary;
 pub mod homebrew;
 pub mod nixpkgs;
 
@@ -157,6 +158,7 @@ impl Service {
             "homebrew" => vec!["daemon".to_string(), "homebrew".to_string()],
             "clipboard" => vec!["daemon".to_string(), "clipboard".to_string()],
             "nixpkgs" => vec!["daemon".to_string(), "nixpkgs".to_string()],
+            "dictionary" => vec!["daemon".to_string(), "dictionary".to_string()],
             _ => unreachable!("Invalid service name: {}", self.name),
         };
 
@@ -167,7 +169,7 @@ impl Service {
             .join("\n");
 
         let keep_alive = matches!(self.name.as_str(), "clipboard");
-        // homebrew: hourly, nixpkgs: twice daily (12 hours)
+        // homebrew: hourly, nixpkgs: twice daily (12 hours), dictionary: never (manual only)
         let start_interval = match self.name.as_str() {
             "homebrew" => Some(3600), // 1 hour
             "nixpkgs" => Some(43200), // 12 hours
@@ -271,7 +273,7 @@ fn show_status() -> Result<()> {
     println!("Frisk Services Status:");
     println!();
 
-    let all_services = vec!["apps", "homebrew", "clipboard", "nixpkgs"];
+    let all_services = vec!["apps", "homebrew", "clipboard", "nixpkgs", "dictionary"];
 
     for service_name in all_services {
         let service = Service::new(service_name.to_string())?;
@@ -312,6 +314,7 @@ fn list_services() {
     println!("  homebrew   - Fetch homebrew packages hourly");
     println!("  clipboard  - Monitor clipboard for history (persistent)");
     println!("  nixpkgs    - Fetch nixpkgs packages twice daily");
+    println!("  dictionary - English dictionary (manual refresh only)");
     println!();
     println!("Use 'all' to operate on all services at once");
 }

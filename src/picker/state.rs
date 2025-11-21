@@ -186,6 +186,7 @@ impl AppState {
                                 let mut clipboard = false;
                                 let mut commands = false;
                                 let mut nixpkgs = false;
+                                let mut dictionary = false;
                                 let sources = vec![];
                                 let mut prompt = None;
                                 let mut i = 0;
@@ -197,6 +198,7 @@ impl AppState {
                                         "--clipboard" => clipboard = true,
                                         "--commands" => commands = true,
                                         "--nixpkgs" => nixpkgs = true,
+                                        "--dictionary" => dictionary = true,
                                         "--prompt" | "-p" => {
                                             if i + 1 < args.len() {
                                                 i += 1;
@@ -212,7 +214,7 @@ impl AppState {
                                 }
 
                                 self.handle_reload(
-                                    apps, homebrew, clipboard, commands, nixpkgs, sources, prompt,
+                                    apps, homebrew, clipboard, commands, nixpkgs, dictionary, sources, prompt,
                                 );
                                 return Ok(());
                             }
@@ -265,6 +267,19 @@ impl AppState {
                                 .spawn()
                                 .map_err(|e| Error::new(format!("Failed to open URL: {}", e)))?;
                             self.should_exit = true;
+                        }
+                        ElementType::Dictionary => {
+                            crate::log!("Copying definition: {}", element.value);
+                            let pasteboard = NSPasteboard::generalPasteboard();
+                            pasteboard.clearContents();
+                            let ns_string = NSString::from_str(&element.value);
+                            if unsafe {
+                                pasteboard.setString_forType(&ns_string, NSPasteboardTypeString)
+                            } {
+                                self.should_exit = true;
+                            } else {
+                                return Err(Error::new("Failed to copy"));
+                            }
                         }
                     }
                 }
@@ -391,16 +406,18 @@ impl AppState {
         clipboard: bool,
         commands: bool,
         nixpkgs: bool,
+        dictionary: bool,
         sources: Vec<String>,
         prompt: Option<String>,
     ) {
         crate::log!(
-            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, nixpkgs={}, sources={:?}, prompt={:?}",
+            "Reloading with: apps={}, homebrew={}, clipboard={}, commands={}, nixpkgs={}, dictionary={}, sources={:?}, prompt={:?}",
             apps,
             homebrew,
             clipboard,
             commands,
             nixpkgs,
+            dictionary,
             sources,
             prompt
         );
@@ -443,6 +460,14 @@ impl AppState {
         if nixpkgs {
             if let Ok(Some(nix_list)) = crate::loader::load_binary_source("nixpkgs.bin") {
                 for item in nix_list {
+                    new_elements.add(item);
+                }
+            }
+        }
+
+        if dictionary {
+            if let Ok(Some(dict_list)) = crate::loader::load_binary_source("dictionary.bin") {
+                for item in dict_list {
                     new_elements.add(item);
                 }
             }

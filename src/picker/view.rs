@@ -310,12 +310,13 @@ impl CustomView {
                 clipboard,
                 commands,
                 nixpkgs,
+                dictionary,
                 sources,
                 prompt,
             } => {
                 let mut state = self.ivars().state.borrow_mut();
                 state.handle_reload(
-                    apps, homebrew, clipboard, commands, nixpkgs, sources, prompt,
+                    apps, homebrew, clipboard, commands, nixpkgs, dictionary, sources, prompt,
                 );
             }
             IpcMessage::Search { .. } => {}

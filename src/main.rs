@@ -30,6 +30,7 @@ fn main() -> Result<()> {
                 DaemonCommands::Homebrew => services::homebrew::run(),
                 DaemonCommands::Clipboard => services::clipboard::run(),
                 DaemonCommands::Nixpkgs => services::nixpkgs::run(),
+                DaemonCommands::Dictionary => services::dictionary::run(),
             }
         }
         None => {

@@ -149,5 +149,18 @@ fn load_elements(cli: &Cli) -> Result<ElementList> {
         }
     }
 
+    if cli.dictionary {
+        if let Some(dictionary) = load_binary_source("dictionary.bin")? {
+            let count = dictionary.len();
+            for entry in dictionary {
+                elements.add(entry);
+            }
+            crate::log!("Loaded {} dictionary entries from dictionary.bin", count);
+        } else {
+            eprintln!("Warning: --dictionary specified but dictionary.bin not found");
+            eprintln!("Run: frisk daemon dictionary");
+        }
+    }
+
     Ok(elements)
 }

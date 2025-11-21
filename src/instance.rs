@@ -28,6 +28,7 @@ pub fn check_single_instance(cli: &Cli) -> Result<bool> {
                         clipboard: cli.clipboard,
                         commands: cli.commands,
                         nixpkgs: cli.nixpkgs,
+                        dictionary: cli.dictionary,
                         sources: cli.source.iter().map(|p| p.display().to_string()).collect(),
                         prompt: cli.prompt.clone(),
                     };

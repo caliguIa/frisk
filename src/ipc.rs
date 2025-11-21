@@ -15,6 +15,7 @@ pub enum IpcMessage {
         clipboard: bool,
         commands: bool,
         nixpkgs: bool,
+        dictionary: bool,
         sources: Vec<String>,
         prompt: Option<String>,
     },

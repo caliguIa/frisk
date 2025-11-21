@@ -81,4 +81,10 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<zip::result::ZipError> for Error {
+    fn from(err: zip::result::ZipError) -> Self {
+        Self::new(format!("Zip error: {}", err))
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

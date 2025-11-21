@@ -40,6 +40,10 @@ pub struct Cli {
     /// Enable nixpkgs search (requires daemon)
     #[arg(long)]
     pub nixpkgs: bool,
+
+    /// Enable dictionary search (requires daemon)
+    #[arg(long, alias = "dict")]
+    pub dictionary: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -72,6 +76,7 @@ pub enum DaemonCommands {
     Homebrew,
     Clipboard,
     Nixpkgs,
+    Dictionary,
 }
 
 pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {
@@ -80,7 +85,8 @@ pub fn parse_service_name(name: &str) -> Option<Vec<&'static str>> {
         "homebrew" | "brew" => Some(vec!["homebrew"]),
         "clipboard" | "clip" => Some(vec!["clipboard"]),
         "nixpkgs" | "nix" => Some(vec!["nixpkgs"]),
-        "all" => Some(vec!["apps", "homebrew", "clipboard", "nixpkgs"]),
+        "dictionary" | "dict" => Some(vec!["dictionary"]),
+        "all" => Some(vec!["apps", "homebrew", "clipboard", "nixpkgs", "dictionary"]),
         _ => None,
     }
 }

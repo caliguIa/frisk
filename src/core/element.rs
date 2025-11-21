@@ -13,6 +13,7 @@ pub enum ElementType {
     NixPackage,
     RustCrate,
     HomebrewPackage,
+    Dictionary,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -60,6 +61,14 @@ impl Element {
             name: name.into_boxed_str(),
             value: attr_name.into_boxed_str(),
             element_type: ElementType::NixPackage,
+        }
+    }
+
+    pub fn new_dictionary(name: String, value: String) -> Self {
+        Self {
+            name: name.into_boxed_str(),
+            value: value.into_boxed_str(),
+            element_type: ElementType::Dictionary,
         }
     }
 }
