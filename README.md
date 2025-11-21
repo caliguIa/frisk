@@ -18,6 +18,7 @@ frisk --homebrew                # Homebrew packages
 frisk --clipboard               # Clipboard history
 frisk --commands                # Custom commands from config
 frisk --nixpkgs                 # NixOS packages
+frisk --dictionary              # Dictionary definitions
 ```
 
 Combine multiple sources:
@@ -80,6 +81,7 @@ You can also run daemons directly (useful for testing):
 frisk daemon apps
 frisk daemon homebrew
 frisk daemon clipboard
+frisk daemon dictionary
 ```
 
 ## Features
